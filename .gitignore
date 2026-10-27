@@ -1,0 +1,22 @@
+# Secrets and local environment
+.env
+.venv/
+__pycache__/
+*.pyc
+
+# Data: raw downloads and generated datasets are rebuilt locally.
+# Committed: the match history the features are built from, and the small
+# result summaries the dashboard shows.
+data/*
+!data/fixtures.csv
+!data/feature_reference.json
+!data/nn_market_residual_summary.csv
+!data/nn_pinnacle_xg_summary.csv
+
+# Local SQLite cache / prediction log and their journal files
+*.sqlite
+*.sqlite-*
+
+# Local debug output
+api_test_after_optimization.json
+matches_debug.json

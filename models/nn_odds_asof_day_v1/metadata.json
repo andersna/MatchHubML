@@ -1,0 +1,131 @@
+{
+  "artifact_name": "nn_odds_asof_day_v1",
+  "created_utc": "2026-10-20T10:04:20.343810+00:00",
+  "model_class": "MatchNet",
+  "architecture": [
+    30,
+    32,
+    "ReLU",
+    "Dropout(0.15)",
+    16,
+    "ReLU",
+    3
+  ],
+  "feature_columns_in_order": [
+    "home_avg_goals_for",
+    "home_avg_goals_against",
+    "home_avg_points",
+    "away_avg_goals_for",
+    "away_avg_goals_against",
+    "away_avg_points",
+    "home_last5_goals_for",
+    "home_last5_goals_against",
+    "home_last5_points",
+    "away_last5_goals_for",
+    "away_last5_goals_against",
+    "away_last5_points",
+    "home_attack_strength",
+    "away_attack_strength",
+    "home_defense_strength",
+    "away_defense_strength",
+    "home_expected_goals",
+    "away_expected_goals",
+    "home_elo_k16",
+    "away_elo_k16",
+    "home_elo_k32",
+    "away_elo_k32",
+    "home_elo_k48",
+    "away_elo_k48",
+    "elo_difference_k16",
+    "elo_difference_k32",
+    "elo_difference_k48",
+    "odds_prob_home",
+    "odds_prob_draw",
+    "odds_prob_away"
+  ],
+  "feature_count": 30,
+  "class_to_index": {
+    "H": 0,
+    "D": 1,
+    "A": 2
+  },
+  "index_to_class": [
+    "H",
+    "D",
+    "A"
+  ],
+  "alpha": 0.25,
+  "class_weights_h_d_a": [
+    0.9166713356971741,
+    1.0554956197738647,
+    1.027833104133606
+  ],
+  "final_seed": 42,
+  "optimizer": {
+    "name": "AdamW",
+    "learning_rate": 0.001,
+    "weight_decay": 0.01,
+    "batch_size": 256,
+    "epochs": 12,
+    "training_loss": "weighted CrossEntropyLoss",
+    "class_weights": "inverse class frequencies on the final fit data raised to alpha, mean-normalized over present classes"
+  },
+  "epoch_selection": {
+    "method": "chronological 85/15 unique-date holdout; best epoch by unweighted validation CrossEntropyLoss; patience 8; max 100 epochs; refit all rows for selected epoch count",
+    "best_validation_cross_entropy": 0.969704270362854,
+    "subtrain_rows": 37162,
+    "validation_rows": 5964,
+    "subtrain_start": "2002-08-02",
+    "subtrain_end": "2023-02-19",
+    "validation_start": "2023-02-20",
+    "validation_end": "2026-05-24",
+    "epochs_run": 20
+  },
+  "training_data": {
+    "path": "data\\odds_model_dataset_asof_day_v1.csv",
+    "sha256": "3525296a0a44bc51bc2c2021f675547537b1fc1d1c3fe8eca718c83dcaa127bd",
+    "rows": 43126,
+    "start_date": "2002-08-02",
+    "end_date": "2026-05-24",
+    "unique_odds_match_keys": 43126,
+    "asof_day_provenance_check": {
+      "modern_baseline_rows": 58980,
+      "asof_day_baseline_rows": 58980,
+      "calendar_blocks_match": true,
+      "asof_day_blocks": [
+        {
+          "start": "1993-08-06",
+          "end": "2001-04-10",
+          "dates": 1441
+        },
+        {
+          "start": "2001-04-11",
+          "end": "2010-10-22",
+          "dates": 1441
+        },
+        {
+          "start": "2010-10-23",
+          "end": "2018-12-29",
+          "dates": 1440
+        },
+        {
+          "start": "2018-12-30",
+          "end": "2026-10-12",
+          "dates": 1440
+        }
+      ]
+    }
+  },
+  "odds_timestamp_caveat": "Historical odds have no documented snapshot timestamps; availability before kickoff is unverified.",
+  "runtime": {
+    "python": "3.12.10",
+    "pytorch": "2.14.1+cu132",
+    "numpy": "2.5.4",
+    "pandas": "3.0.6",
+    "device_used_for_training": "cuda"
+  },
+  "files": {
+    "weights": "model_state_dict.pt",
+    "preprocessing": "preprocessing.json"
+  }
+}

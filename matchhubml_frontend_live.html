@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MatchHubML</title>
+<style>
+:root{--bg:#0a1120;--p:#111b2e;--p2:#16233b;--line:#25334d;--txt:#e8eefb;--muted:#93a3c0;--green:#5fe0b0;--blue:#5b9bff;--amber:#ffc35c;--red:#ff7a8a;--violet:#b48cff}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(ellipse at top left,#172847,var(--bg) 55%) fixed;color:var(--txt);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1180px;margin:auto;padding:22px 18px 40px}
+header{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:18px;flex-wrap:wrap}
+.brand{display:flex;gap:12px;align-items:center}
+.logo{width:42px;height:42px;border-radius:13px;background:linear-gradient(135deg,#72edbd,#4385ff);display:grid;place-items:center;color:#091322;font-weight:900;font-size:20px}
+h1{font-size:20px;margin:0}h2{font-size:22px;margin:0 0 4px;letter-spacing:-.4px}h3{font-size:15px;margin:0 0 10px}
+.sub,.muted{color:var(--muted)}.sub{font-size:12px}
+.status{font-size:11px;border-radius:99px;padding:6px 11px;border:1px solid var(--line);background:#10192a;color:var(--muted);white-space:nowrap}
+.status.ok{border-color:#2d6a5a;background:#102c2a;color:var(--green)}.status.error{border-color:#773b4b;background:#321823;color:var(--red)}
+nav{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:18px;overflow-x:auto}
+nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+nav button[aria-selected=true]{color:var(--txt);border-bottom-color:var(--green)}
+nav .count{font-size:11px;background:var(--p2);border-radius:99px;padding:1px 7px;margin-left:5px;color:var(--muted)}
+select,button.btn,input[type=search]{background:var(--p);border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:9px;font:inherit}
+button.btn{cursor:pointer}button.btn:hover{border-color:var(--blue)}button.btn:disabled{opacity:.55;cursor:wait}
+button.primary{background:#14324f;border-color:#2a5d8f}
+label.check{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.toolbar .grow{flex:1 1 180px;min-width:150px}
+.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.card,.metric,.panel{background:linear-gradient(155deg,#17233a,#10182a);border:1px solid var(--line);border-radius:14px}
+.metric{padding:13px 14px}.metric .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.metric .value{font-size:22px;font-weight:750;letter-spacing:-.5px;margin-top:2px}.metric .note{font-size:11px;color:var(--muted)}
+.panel{padding:16px;margin-bottom:14px}
+.dayhead{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin:18px 0 8px;font-weight:700}
+.matches{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.card{padding:15px;min-width:0}
+.top{display:flex;justify-content:space-between;gap:10px;font-size:11px;margin-bottom:8px}
+.league{color:var(--blue);font-weight:750;text-transform:uppercase;letter-spacing:.5px}
+.teams{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:12px;font-weight:700}
+.teams span:last-child{text-align:right}.vs{font-size:10px;color:var(--muted);border:1px solid var(--line);padding:3px 6px;border-radius:7px;font-weight:500}
+.outcomes{display:grid;gap:7px}
+.orow{display:grid;grid-template-columns:72px 1fr 128px;gap:10px;align-items:center}
+.olabel{font-size:12px;color:var(--muted)}.olabel b{color:var(--txt);display:block;font-size:13px}
+.bar{position:relative;height:22px;background:#0b1324;border:1px solid #24314b;border-radius:7px;overflow:hidden}
+.bar .model{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,#2f6f5d,#5fe0b0);opacity:.85}
+.bar .market{position:absolute;top:-1px;bottom:-1px;width:2px;background:var(--amber)}
+.bar .txt{position:absolute;left:8px;top:1px;font-size:12px;font-weight:700;color:#06121d}
+.bar .txt.light{color:var(--txt)}
+.oright{font-size:11px;color:var(--muted);text-align:right;line-height:1.35}
+.pos{color:var(--green)}.neg{color:var(--red)}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.badge{font-size:11px;border-radius:99px;padding:3px 9px;border:1px solid var(--line);color:var(--muted)}
+.badge.green{border-color:#2d6a5a;color:var(--green);background:#102c2a}.badge.amber{border-color:#6b5426;color:var(--amber);background:#2a2214}
+.badge.blue{border-color:#2a4f86;color:var(--blue);background:#12223d}
+details{margin-top:11px;border-top:1px solid var(--line);padding-top:9px}
+summary{cursor:pointer;color:var(--muted);font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:6px 8px;border-bottom:1px solid #1f2b42;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:600;font-size:11px}
+td.l,th.l{text-align:left}
+.tablewrap{overflow-x:auto}
+.ftable td:nth-child(2){text-align:center;color:var(--muted);white-space:normal}
+.fbar{display:inline-block;height:6px;border-radius:3px;vertical-align:middle;margin:0 4px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:6px 0 10px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px}
+.notice{font-size:12px;color:var(--muted);background:#10192a;border:1px solid var(--line);padding:11px 12px;border-radius:10px;margin:10px 0}
+.notice.error{border-color:#773b4b;color:var(--red)}
+.state{padding:26px;text-align:center;color:var(--muted)}
+.hidden{display:none!important}
+.models{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px}.kv span:nth-child(odd){color:var(--muted)}.kv span:nth-child(even){text-align:right}
+.tag{font-size:10px;border-radius:99px;padding:2px 8px;background:#12372e;color:var(--green);margin-left:6px;vertical-align:2px}
+.hit{color:var(--green)}.miss{color:var(--red)}
+pre.report{white-space:pre-wrap;font-size:11px;color:var(--muted);max-height:320px;overflow:auto;margin:10px 0 0}
+svg text{fill:var(--muted);font-size:10px}
+.covhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px}.bignum{font-size:30px;font-weight:800;letter-spacing:-1px}.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#0b1324;border:1px solid #24314b}.stack.small{height:8px}.stack div{height:100%}.covgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.covbox{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:12px;color:var(--muted)}.covbox b{color:var(--txt);font-size:13px}.covn{font-size:26px;font-weight:800;min-width:42px;line-height:1.1}.covbox.blue .covn{color:var(--blue)}.covbox.amber .covn{color:var(--amber)}.covbox.grey .covn{color:var(--muted)}.syncrow{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.synchint{font-weight:700;margin-bottom:2px}button.big{padding:12px 20px;font-size:15px;font-weight:700;min-width:190px}#oddsBanner a{color:var(--blue)}
+footer{text-align:center;color:#71809f;font-size:11px;margin-top:24px}
+@media(max-width:900px){.covgrid{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(2,1fr)}.matches,.models{grid-template-columns:1fr}}
+@media(max-width:480px){.wrap{padding:16px 12px}.orow{grid-template-columns:64px 1fr 92px}.metric .value{font-size:19px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="brand"><div class="logo">M</div><div><h1>MatchHubML</h1><div class="sub">Fodboldforudsigelser · model mod marked</div></div></div>
+  <div class="status" id="apiStatus" role="status">● Forbinder til lokal API…</div>
+</header>
+
+<nav role="tablist">
+  <button role="tab" aria-selected="true" data-tab="matches">Kampe<span class="count" id="tabCountMatches">–</span></button>
+  <button role="tab" aria-selected="false" data-tab="results">Resultater<span class="count" id="tabCountResults">–</span></button>
+  <button role="tab" aria-selected="false" data-tab="models">Modeller</button>
+  <button role="tab" aria-selected="false" data-tab="data">Data &amp; synkronisering</button>
+</nav>
+
+<!-- KAMPE -->
+<section id="tab-matches" role="tabpanel">
+  <div class="toolbar">
+    <select id="version" aria-label="Model"></select>
+    <select id="league" aria-label="Liga"><option value="">Alle ligaer</option><option>Premier League</option><option>La Liga</option><option>Bundesliga</option><option>Serie A</option><option>Ligue 1</option></select>
+    <select id="sort" aria-label="Sortering">
+      <option value="kickoff">Sortér: kickoff</option>
+      <option value="edge">Sortér: største afvigelse fra marked</option>
+      <option value="ev">Sortér: højeste forventede værdi</option>
+      <option value="confidence">Sortér: mest sikre favorit</option>
+    </select>
+    <input type="search" id="search" class="grow" placeholder="Søg hold…" aria-label="Søg hold">
+    <label class="check"><input type="checkbox" id="valueOnly"> Kun positiv forventet værdi</label>
+    <button class="btn" id="refresh" type="button">Opdater</button>
+  </div>
+  <div id="oddsBanner" class="notice hidden"></div>
+  <div class="grid4">
+    <div class="metric"><div class="label">Kampe</div><div class="value" id="mCount">–</div><div class="note" id="mCountNote">med gemte Bet365-odds</div></div>
+    <div class="metric"><div class="label">Næste kickoff</div><div class="value" id="mNext" style="font-size:17px">–</div><div class="note" id="mNextNote">&nbsp;</div></div>
+    <div class="metric"><div class="label">Positiv forventet værdi</div><div class="value" id="mValue">–</div><div class="note">udfald hvor model × odds &gt; 1</div></div>
+    <div class="metric"><div class="label">Sprunget over</div><div class="value" id="mSkipped">–</div><div class="note"><a href="#" id="showSkipped" style="color:var(--blue)">se årsager</a></div></div>
+  </div>
+  <div class="legend"><span><i style="background:#5fe0b0"></i>Model</span><span><i style="background:var(--amber)"></i>Marked (Bet365-prisen ved seneste opslag, uden margin)</span><span>Δ = model − marked i procentpoint · EV = forventet afkast pr. kr. ved Bet365-odds</span></div>
+  <div id="skippedBox" class="panel hidden"><h3>Kampe der ikke kunne forudsiges</h3><div class="tablewrap"><table id="skippedTable"></table></div></div>
+  <div id="matchState" class="state">Henter kampe…</div>
+  <div id="matchList"></div>
+</section>
+
+<!-- RESULTATER -->
+<section id="tab-results" role="tabpanel" class="hidden">
+  <div class="notice">Hver forudsigelse gemmes før kickoff og vurderes, når resultatet er hentet (via synkronisering). <b>Log loss</b> måler hvor gode sandsynlighederne er – lavere er bedre. <b>Δ mod odds</b> &lt; 0 betyder, at modellen var bedre end markedet. Med under et par hundrede kampe er forskellene mest tilfældighed; se ± (standardfejl).</div>
+  <div class="grid4" id="perfMetrics"></div>
+  <div class="panel"><h3>Model mod marked over tid</h3><div class="legend" id="chartLegend"></div><div id="chart"></div><div class="sub">Kumuleret forskel i log loss mod Bet365-odds, kamp for kamp. Under nul = modellen har samlet været bedre end markedet.</div></div>
+  <div class="panel"><h3>Pr. model</h3><div class="tablewrap"><table id="perfTable"></table></div></div>
+  <div class="panel"><h3>Vurderede kampe</h3><div class="toolbar"><select id="resultModel" aria-label="Model i tabellen"></select><span class="sub" id="pendingNote"></span></div><div class="tablewrap"><table id="resultTable"></table></div></div>
+</section>
+
+<!-- MODELLER -->
+<section id="tab-models" role="tabpanel" class="hidden">
+  <div class="models" id="modelCards"></div>
+  <div class="panel"><h3>Eksperiment 1 · Netværk der retter markedet (backtest 2010–2026)</h3><div class="sub" id="exp1Scope"></div><div class="tablewrap"><table id="exp1Table"></table></div>
+    <div class="notice">V3 er <code>residual_27_ensemble</code>. Nye features (hviledage, oprykkere, skud-form, liga) og vægtning efter nyhed/label smoothing gav ingen sikker forbedring.</div></div>
+  <div class="panel"><h3>Eksperiment 2 · Pinnacle i stedet for Bet365, og xG-form (sæsonvis 2016–2026)</h3><div class="tablewrap"><table id="exp2Table"></table></div>
+    <div class="notice">Alle rækker er vurderet på de samme kampe og sammenlignet med Bet365-odds alene. <b>Pinnacle-lukkeodds</b> kendes først ved kickoff og er kun en reference for, hvor meget bedre et skarpere/senere marked er. Football-data.co.uk stoppede med Pinnacle-priser i januar 2026, så Pinnacle kan ikke bruges live fra den kilde.</div></div>
+</section>
+
+<!-- DATA -->
+<section id="tab-data" role="tabpanel" class="hidden">
+  <div class="panel">
+    <div class="covhead">
+      <div><h3 style="margin-bottom:2px">Odds til kommende kampe</h3><div class="sub">Forudsigelser kræver Bet365-odds. Hvert tryk henter op til 5 odds – kampene med tidligst kickoff først.</div></div>
+      <div class="bignum" id="covHeadline">–</div>
+    </div>
+    <div class="stack" id="covBar" aria-hidden="true"></div>
+    <div class="covgrid">
+      <div class="covbox blue"><div class="covn" id="covFetchable">–</div><div><b>kan hentes nu</b><br><span id="covFetchableText">&nbsp;</span></div></div>
+      <div class="covbox grey"><div class="covn" id="covNotListed">–</div><div><b>ikke klar hos udbyderen</b><br>Kampen vises først hos 5DollarFootball nogle dage før kickoff. Tryk igen om et par dage.</div></div>
+      <div class="covbox amber"><div class="covn" id="covNoOdds">–</div><div><b>slået op uden Bet365-odds</b><br>Bet365 havde ingen pris endnu. Prøves igen automatisk efter 6 timer.</div></div>
+    </div>
+    <div class="syncrow">
+      <button class="btn primary big" id="syncButton" type="button">Hent næste 5 odds</button>
+      <div><div id="syncHint" class="synchint">&nbsp;</div><div class="sub" id="syncCost"></div><div class="sub">Henter også nye kampe og resultater (højst én gang i timen, for at spare football-data.org-kald) og nye historiske resultater (højst hver 12. time).</div></div>
+    </div>
+    <div class="tablewrap" style="margin-top:14px"><table id="covTable"></table></div>
+    <details style="margin-top:12px"><summary id="missingSummary">Kampe uden odds</summary><div class="tablewrap" style="margin-top:8px"><table id="missingTable"></table></div></details>
+  </div>
+
+  <div class="panel">
+    <div class="covhead">
+      <div><h3 style="margin-bottom:2px">Sæsonfil fra football-data.co.uk</h3><div class="sub">Gratis og uden kvote. Opdateres typisk efter hver spillerunde med resultater, statistik og Bet365-odds for alle spillede kampe.</div></div>
+      <div class="bignum" id="histHeadline">–</div>
+    </div>
+    <div class="kv" id="histFacts" style="max-width:640px;margin:10px 0 14px"></div>
+    <div class="syncrow">
+      <button class="btn big" id="historyButton" type="button">Hent nyeste fil nu</button>
+      <div class="sub" style="max-width:640px">Opdaterer spillede kampe med resultat og statistik (bruges til form og Elo), gemmer filens Bet365-odds til gentræning, og giver spillede kampe uden 5DollarFootball-odds odds fra filen, så de kommer med under <b>Resultater</b>.</div>
+    </div>
+    <div id="historyResult"></div>
+  </div>
+
+  <div class="panel" id="lastSyncPanel">
+    <h3>Seneste synkronisering</h3>
+    <div id="lastSyncBody" class="sub">Ingen synkronisering registreret endnu.</div>
+  </div>
+
+  <div class="grid4" id="statusMetrics"></div>
+  <div class="panel"><h3>Datakilder</h3><div class="tablewrap"><table id="sourceTable"></table></div></div>
+  <div class="panel"><h3>Seneste kald pr. datasæt</h3><div class="tablewrap"><table id="syncTable"></table></div></div>
+</section>
+
+<footer>MatchHubML · lokal FastAPI-backend · forudsigelser er modelestimater, ikke garantier</footer>
+</div>
+
+<script>
+const OUTCOMES = [['H','1','Hjemme'],['D','X','Uafgjort'],['A','2','Ude']];
+const MODEL_COLORS = {v3:'#5fe0b0', v1:'#5b9bff', v2:'#ffc35c', odds:'#93a3c0'};
+const FEATURE_GROUPS = [
+  ['Form – hele historikken', [['avg_goals_for','Mål scoret pr. kamp'],['avg_goals_against','Mål imod pr. kamp'],['avg_points','Point pr. kamp']]],
+  ['Form – seneste 5 kampe', [['last5_goals_for','Mål scoret pr. kamp'],['last5_goals_against','Mål imod pr. kamp'],['last5_points','Point pr. kamp']]],
+  ['Styrke (angreb/forsvar)', [['attack_strength','Angrebsstyrke'],['defense_strength','Forsvarsstyrke'],['expected_goals','Forventede mål']]],
+  ['Elo-rating', [['elo_k16','Elo (K=16)'],['elo_k32','Elo (K=32)'],['elo_k48','Elo (K=48)']]],
+];
+const $ = id => document.getElementById(id);
+const state = {matches: [], skipped: [], performance: null, models: null, status: null, loaded: {}};
+let requestNumber = 0;
+
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pct = (v, d=1) => v == null || !Number.isFinite(+v) ? '–' : `${(v*100).toLocaleString('da-DK',{minimumFractionDigits:d,maximumFractionDigits:d})}%`;
+const num = (v, d=3) => v == null || !Number.isFinite(+v) ? '–' : (+v).toLocaleString('da-DK',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pp = v => `${v >= 0 ? '+' : '−'}${Math.abs(v*100).toLocaleString('da-DK',{minimumFractionDigits:1,maximumFractionDigits:1})}`;
+const signed = (v, d=4) => v == null ? '–' : `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toLocaleString('da-DK',{minimumFractionDigits:d,maximumFractionDigits:d})}`;
+const cls = (v, betterNegative=false) => v == null || v === 0 ? '' : ((v < 0) === betterNegative ? 'pos' : 'neg');
+const dt = (raw, opts) => { const d = new Date(raw); return Number.isNaN(d.getTime()) ? esc(raw ?? '–') : new Intl.DateTimeFormat('da-DK', {timeZone:'Europe/Copenhagen', ...opts}).format(d); };
+const kickoffLabel = raw => dt(raw, {hour:'2-digit', minute:'2-digit'});
+const dayLabel = raw => dt(raw, {weekday:'long', day:'numeric', month:'long'});
+const shortDate = raw => dt(raw, {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
+
+async function api(path, options={}) {
+  const response = await fetch(path, {headers:{Accept:'application/json'}, cache:'no-store', ...options});
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+  return payload;
+}
+function setApiStatus(text, kind='') { $('apiStatus').className = `status ${kind}`; $('apiStatus').textContent = `● ${text}`; }
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll('nav button').forEach(button => button.addEventListener('click', () => showTab(button.dataset.tab)));
+function showTab(name) {
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  document.querySelectorAll('[role=tabpanel]').forEach(p => p.classList.toggle('hidden', p.id !== `tab-${name}`));
+  if (name === 'results') loadPerformance();
+  if (name === 'models' && !state.loaded.models) loadModels();
+  if (name === 'data') { loadStatus(); loadCoverage(); loadLastSync(); loadHistory(); }
+  try { localStorage.setItem('matchhub-tab', name); } catch (_) {}
+}
+
+/* ---------- Kampe ---------- */
+function bestOutcome(probs) { return OUTCOMES.reduce((best, [k]) => probs[k] > probs[best] ? k : best, 'H'); }
+function maxEdge(m) { return Math.max(...OUTCOMES.map(([k]) => Math.abs(m.edge[k]))); }
+function maxEv(m) { return Math.max(...OUTCOMES.map(([k]) => m.expected_value[k])); }
+
+function outcomeRows(m) {
+  const fav = bestOutcome(m.probabilities);
+  return OUTCOMES.map(([k, short, long]) => {
+    const model = m.probabilities[k], market = m.odds_probabilities[k], edge = m.edge[k], ev = m.expected_value[k];
+    return `<div class="orow">
+      <div class="olabel"><b>${short}${k === fav ? ' ★' : ''}</b>${long}</div>
+      <div class="bar" title="Model ${pct(model)} · marked ${pct(market)}">
+        <div class="model" style="width:${(model*100).toFixed(1)}%"></div>
+        <div class="market" style="left:${(market*100).toFixed(1)}%"></div>
+        <span class="txt ${model < 0.16 ? 'light' : ''}">${pct(model)}</span>
+      </div>
+      <div class="oright">marked ${pct(market)} · <span class="${edge >= 0 ? 'pos' : 'neg'}">Δ ${pp(edge)}</span><br>odds ${num(m.odds_decimal[k], 2)} · <span class="${ev > 0 ? 'pos' : ''}">EV ${ev >= 0 ? '+' : '−'}${Math.abs(ev*100).toFixed(1)}%</span></div>
+    </div>`;
+  }).join('');
+}
+
+function featureTable(features) {
+  const rows = FEATURE_GROUPS.map(([group, items]) => `<tr><th class="l" colspan="3" style="padding-top:10px;color:var(--txt)">${group}</th></tr>` + items.map(([key, label]) => {
+    const home = features[`home_${key}`], away = features[`away_${key}`];
+    const better = key.includes('against') ? (home < away ? 'h' : home > away ? 'a' : '') : (home > away ? 'h' : home < away ? 'a' : '');
+    return `<tr><td class="${better === 'h' ? 'pos' : ''}">${num(home, key.startsWith('elo') ? 0 : 2)}</td><td>${label}</td><td class="${better === 'a' ? 'pos' : ''}">${num(away, key.startsWith('elo') ? 0 : 2)}</td></tr>`;
+  }).join('')).join('');
+  const diffs = ['k16','k32','k48'].map(k => `${k.toUpperCase()}: ${signed(features[`elo_difference_${k}`], 0)}`).join(' · ');
+  return `<table class="ftable"><tr><th>Hjemme</th><th style="text-align:center">Feature</th><th>Ude</th></tr>${rows}</table><div class="sub" style="margin-top:6px">Elo-forskel (hjemme − ude) ${diffs}. Grøn = bedste værdi.</div>`;
+}
+
+function modelComparison(m) {
+  const rows = Object.entries(m.all_models).sort().map(([v, p]) => `<tr><td>${v.toUpperCase()}${v === m.model_version_selected ? ' ◂' : ''}</td>${OUTCOMES.map(([k]) => `<td>${pct(p[k])}</td>`).join('')}</tr>`).join('');
+  return `<table><tr><th>Kilde</th><th>1</th><th>X</th><th>2</th></tr>${rows}<tr><td>Marked</td>${OUTCOMES.map(([k]) => `<td>${pct(m.odds_probabilities[k])}</td>`).join('')}</tr></table>`;
+}
+
+function renderCard(m) {
+  const fav = bestOutcome(m.probabilities);
+  const valueOutcomes = OUTCOMES.filter(([k]) => m.expected_value[k] > 0);
+  const badges = [
+    `<span class="badge blue">Favorit: ${OUTCOMES.find(o => o[0] === fav)[2]} ${pct(m.probabilities[fav], 0)}</span>`,
+    ...valueOutcomes.map(([k, s]) => `<span class="badge green">Værdi på ${s}: EV +${(m.expected_value[k]*100).toFixed(1)}%</span>`),
+    maxEdge(m) >= 0.03 ? `<span class="badge amber">Stor afvigelse fra marked</span>` : '',
+  ].join('');
+  return `<article class="card">
+    <div class="top"><span class="league">${esc(m.league)}</span><span class="muted">${kickoffLabel(m.kickoff_at)}</span></div>
+    <div class="teams"><span>${esc(m.home_team)}</span><span class="vs">VS</span><span>${esc(m.away_team)}</span></div>
+    <div class="outcomes">${outcomeRows(m)}</div>
+    <div class="badges">${badges}</div>
+    <details><summary>Alle modeller og features</summary>
+      <div style="margin-top:8px">${modelComparison(m)}</div>
+      <div style="margin-top:12px">${featureTable(m.features)}</div>
+      <div class="sub" style="margin-top:8px">${esc(m.odds_source || 'Odds')} hentet ${shortDate(m.odds_observed_at_utc)}.</div>
+    </details>
+  </article>`;
+}
+
+function renderMatches() {
+  const query = $('search').value.trim().toLowerCase();
+  let list = state.matches.filter(m => !query || `${m.home_team} ${m.away_team}`.toLowerCase().includes(query));
+  if ($('valueOnly').checked) list = list.filter(m => maxEv(m) > 0);
+  const sorters = {
+    kickoff: (a, b) => a.kickoff_at.localeCompare(b.kickoff_at),
+    edge: (a, b) => maxEdge(b) - maxEdge(a),
+    ev: (a, b) => maxEv(b) - maxEv(a),
+    confidence: (a, b) => Math.max(...Object.values(b.probabilities)) - Math.max(...Object.values(a.probabilities)),
+  };
+  list.sort(sorters[$('sort').value]);
+  if (!list.length) {
+    $('matchList').innerHTML = '';
+    $('matchState').textContent = state.matches.length ? 'Ingen kampe matcher filtrene.' : 'Ingen kommende kampe med gemte Bet365-odds. Kør en synkronisering under "Data & synkronisering".';
+    $('matchState').classList.remove('hidden');
+    return;
+  }
+  $('matchState').classList.add('hidden');
+  if ($('sort').value === 'kickoff') {
+    const days = new Map();
+    list.forEach(m => { const key = dayLabel(m.kickoff_at); days.set(key, [...(days.get(key) || []), m]); });
+    $('matchList').innerHTML = [...days].map(([day, items]) => `<div class="dayhead">${day} · ${items.length} kampe</div><div class="matches">${items.map(renderCard).join('')}</div>`).join('');
+  } else {
+    $('matchList').innerHTML = `<div class="matches">${list.map(renderCard).join('')}</div>`;
+  }
+}
+
+async function loadMatches() {
+  const current = ++requestNumber;
+  $('refresh').disabled = true;
+  $('matchState').textContent = 'Henter kampe og beregner forudsigelser…';
+  $('matchState').classList.remove('hidden');
+  setApiStatus('Henter kampe…');
+  const params = new URLSearchParams({model_version: $('version').value || 'v3', limit: '200'});
+  if ($('league').value) params.set('league', $('league').value);
+  try {
+    const payload = await api(`/api/matches?${params}`);
+    if (current !== requestNumber) return;
+    state.matches = payload.matches || [];
+    state.skipped = payload.skipped || [];
+    $('mCount').textContent = state.matches.length;
+    $('tabCountMatches').textContent = state.matches.length;
+    $('mSkipped').textContent = payload.skipped_count ?? 0;
+    $('mValue').textContent = state.matches.reduce((n, m) => n + OUTCOMES.filter(([k]) => m.expected_value[k] > 0).length, 0);
+    const next = [...state.matches].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at))[0];
+    $('mNext').textContent = next ? dt(next.kickoff_at, {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : '–';
+    $('mNextNote').textContent = next ? `${next.home_team} – ${next.away_team}` : '';
+    $('mCountNote').textContent = payload.logged_new ? `${payload.logged_new} nye forudsigelser logget` : 'med gemte Bet365-odds';
+    $('skippedTable').innerHTML = state.skipped.length
+      ? `<tr><th>Kamp</th><th class="l">Liga</th><th class="l">Årsag</th></tr>` + state.skipped.map(s => `<tr><td>${esc(s.home_team)} – ${esc(s.away_team)}</td><td class="l">${esc(s.league)}</td><td class="l" style="white-space:normal">${esc(s.reason)}</td></tr>`).join('')
+      : '<tr><td>Ingen kampe blev sprunget over.</td></tr>';
+    renderMatches();
+    setApiStatus('Lokal API forbundet', 'ok');
+  } catch (error) {
+    if (current !== requestNumber) return;
+    state.matches = [];
+    $('matchList').innerHTML = '';
+    $('matchState').innerHTML = `<div class="notice error">Kunne ikke hente kampe: ${esc(error.message)}. Kontrollér at backenden kører (<code>uvicorn src.api:app</code>).</div>`;
+    setApiStatus('API ikke tilgængelig', 'error');
+  } finally {
+    if (current === requestNumber) $('refresh').disabled = false;
+  }
+}
+
+/* ---------- Resultater ---------- */
+function lineChart(series) {
+  const width = 900, height = 220, pad = {l: 44, r: 12, t: 10, b: 22};
+  const longest = Math.max(1, ...series.map(s => s.values.length));
+  const all = series.flatMap(s => s.values).concat([0]);
+  const lo = Math.min(...all), hi = Math.max(...all), span = (hi - lo) || 1;
+  const x = i => pad.l + (i / Math.max(1, longest - 1)) * (width - pad.l - pad.r);
+  const y = v => pad.t + (hi - v) / span * (height - pad.t - pad.b);
+  const ticks = [lo, (lo + hi) / 2, hi].map(v => `<line x1="${pad.l}" x2="${width - pad.r}" y1="${y(v)}" y2="${y(v)}" stroke="#1f2b42"/><text x="${pad.l - 6}" y="${y(v) + 3}" text-anchor="end">${signed(v, 2)}</text>`).join('');
+  const zero = `<line x1="${pad.l}" x2="${width - pad.r}" y1="${y(0)}" y2="${y(0)}" stroke="#93a3c0" stroke-dasharray="4 4"/><text x="${width - pad.r}" y="${y(0) - 4}" text-anchor="end">marked</text>`;
+  const lines = series.map(s => `<polyline fill="none" stroke="${s.color}" stroke-width="2" points="${s.values.map((v, i) => `${x(i)},${y(v)}`).join(' ')}"/>`).join('');
+  return `<svg viewBox="0 0 ${width} ${height}" width="100%" role="img" aria-label="Kumuleret log loss mod marked">${ticks}${zero}${lines}<text x="${pad.l}" y="${height - 6}">kamp 1</text><text x="${width - pad.r}" y="${height - 6}" text-anchor="end">kamp ${longest}</text></svg>`;
+}
+
+function renderResultTable() {
+  const perf = state.performance, version = $('resultModel').value;
+  const rows = [...perf.matches].reverse().filter(m => m[version]);
+  $('resultTable').innerHTML = rows.length ? `<tr><th>Kickoff</th><th class="l">Kamp</th><th>Resultat</th><th>Model 1/X/2</th><th>Marked 1/X/2</th><th>Model på udfald</th><th>Marked på udfald</th><th>Ramt</th><th class="l">Kilde</th></tr>` + rows.map(m => {
+    const p = m[version], index = 'HDA'.indexOf(m.result);
+    const fmt = probs => probs.map(v => Math.round(v * 100)).join(' / ');
+    const better = p.probs[index] > m.odds.probs[index];
+    return `<tr><td>${shortDate(m.kickoff_at || m.match_date)}</td><td class="l">${esc(m.home_team)} – ${esc(m.away_team)}</td><td>${m.home_score}–${m.away_score} (${OUTCOMES[index][1]})</td><td>${fmt(p.probs)}</td><td>${fmt(m.odds.probs)}</td><td class="${better ? 'pos' : 'neg'}">${pct(p.probs[index])}</td><td>${pct(m.odds.probs[index])}</td><td class="${p.hit ? 'hit' : 'miss'}">${p.hit ? '✓' : '✗'}</td><td class="l"><span class="badge ${p.source === 'live' ? 'green' : ''}">${p.source === 'live' ? 'live' : 'rekonstrueret'}</span></td></tr>`;
+  }).join('') : '<tr><td>Ingen vurderede kampe for denne model endnu.</td></tr>';
+}
+
+async function loadPerformance() {
+  try {
+    const perf = state.performance = await api('/api/performance');
+    $('tabCountResults').textContent = perf.matches.length;
+    const v3 = perf.models.find(m => m.model === 'v3');
+    const backfilled = perf.matches.filter(m => m.sources.includes('backfill') && !m.sources.includes('live')).length;
+    $('perfMetrics').innerHTML = [
+      ['Vurderede kampe', perf.matches.length, `${backfilled} rekonstrueret · ${perf.matches.length - backfilled} live`],
+      ['Afventer resultat', perf.pending, 'logget før kickoff'],
+      ['V3 træfsikkerhed', v3 ? pct(v3.accuracy) : '–', `marked ${pct(perf.odds.accuracy)}`],
+      ['V3 Δ log loss mod odds', v3 ? signed(v3.delta_log_loss_vs_odds, 4) : '–', v3 && v3.delta_log_loss_vs_odds_se != null ? `± ${num(v3.delta_log_loss_vs_odds_se, 4)} (standardfejl)` : ''],
+    ].map(([label, value, note]) => `<div class="metric"><div class="label">${label}</div><div class="value">${value}</div><div class="note">${note}</div></div>`).join('');
+    const series = perf.models.map(m => ({name: m.model, color: MODEL_COLORS[m.model] || '#fff', values: m.cumulative_delta_log_loss}));
+    $('chartLegend').innerHTML = series.map(s => `<span><i style="background:${s.color}"></i>${s.name.toUpperCase()}</span>`).join('') + `<span><i style="background:#93a3c0"></i>Bet365-odds (nul-linjen)</span>`;
+    $('chart').innerHTML = perf.matches.length ? lineChart(series) : '<div class="state">Ingen vurderede kampe endnu.</div>';
+    const rows = [...perf.models, perf.odds];
+    $('perfTable').innerHTML = `<tr><th>Model</th><th>Kampe</th><th>Træfsikkerhed</th><th>Log loss</th><th>Brier</th><th>Δ log loss mod odds</th></tr>` + rows.map(m => `<tr><td>${m.model === 'odds' ? 'Bet365-odds' : m.model.toUpperCase()}</td><td>${m.matches}</td><td>${pct(m.accuracy)}</td><td>${num(m.log_loss, 4)}</td><td>${num(m.brier_score, 4)}</td><td class="${cls(m.delta_log_loss_vs_odds, true)}">${m.model === 'odds' ? '–' : `${signed(m.delta_log_loss_vs_odds)} ± ${num(m.delta_log_loss_vs_odds_se, 4)}`}</td></tr>`).join('');
+    $('resultModel').innerHTML = perf.models.map(m => `<option value="${m.model}">${m.model.toUpperCase()}</option>`).join('');
+    if (perf.models.some(m => m.model === 'v3')) $('resultModel').value = 'v3';
+    $('pendingNote').textContent = `${perf.pending} kampe afventer resultat · ${perf.logged} forudsigelser logget i alt`;
+    if (perf.models.length) renderResultTable(); else $('resultTable').innerHTML = '<tr><td>Ingen vurderede kampe endnu. Forudsigelser logges, når kampe vises, og vurderes efter næste synkronisering.</td></tr>';
+  } catch (error) {
+    $('perfMetrics').innerHTML = `<div class="notice error">Kunne ikke hente resultater: ${esc(error.message)}</div>`;
+  }
+}
+
+/* ---------- Modeller ---------- */
+function deltaCell(delta, se) {
+  if (delta == null) return '<td>–</td>';
+  const significant = se && Math.abs(delta) > 2 * se;
+  return `<td class="${cls(delta, true)}">${signed(delta)}${se != null ? ` ± ${num(se, 4)}` : ''}${significant ? ' *' : ''}</td>`;
+}
+
+async function loadModels() {
+  try {
+    const data = state.models = await api('/api/models');
+    state.loaded.models = true;
+    const odds = data.odds_backtest;
+    $('modelCards').innerHTML = data.models.map(m => {
+      const b = m.backtest;
+      return `<div class="panel" style="margin:0"><h3>Model ${m.version.toUpperCase()}${m.default ? '<span class="tag">standard</span>' : ''}</h3>
+        <p class="muted" style="margin-top:0;font-size:12px">${esc(m.description)}</p>
+        <div class="kv">
+          <span>Artefakt</span><span>${esc(m.artifact)}</span>
+          <span>Type</span><span>${esc(m.model_class)}${m.members > 1 ? ` × ${m.members}` : ''}</span>
+          <span>Træningskampe</span><span>${(m.training_rows ?? 0).toLocaleString('da-DK')}</span>
+          <span>Periode</span><span>${esc(m.training_start)} → ${esc(m.training_end)}</span>
+          <span>Klassevægte</span><span>${esc(m.class_weights)}</span>
+          <span>Oprettet</span><span>${shortDate(m.created_utc)}</span>
+          ${b ? `<span>Backtest træfsikkerhed</span><span>${pct(b.accuracy, 2)} <span class="muted">(odds ${pct(b.odds_only_accuracy ?? odds?.accuracy, 2)})</span></span>
+          <span>Backtest log loss</span><span>${num(b.log_loss, 5)} <span class="muted">(odds ${num(b.odds_only_log_loss ?? odds?.log_loss, 5)})</span></span>
+          <span>Δ mod odds</span><span class="${cls(b.delta_log_loss_vs_odds, true)}">${signed(b.delta_log_loss_vs_odds)} ± ${num(b.delta_log_loss_vs_odds_se, 4)}</span>` : ''}
+        </div>${m.backtest_note ? `<div class="sub" style="margin-top:8px">${esc(m.backtest_note)}</div>` : ''}</div>`;
+    }).join('');
+    $('exp1Scope').textContent = data.backtest_scope;
+    const names1 = {odds_only:'Bet365-odds alene', current_v1_ensemble:'V1-arkitektur (5 seeds)', residual_27_ensemble:'Retter markedet, 27 features (V3)', residual_new_features_ensemble:'+ nye features og liga', residual_new_recency_ensemble:'+ vægt på nyere sæsoner', residual_new_recency_ls_ensemble:'+ label smoothing'};
+    const exp1 = data.experiments.market_residual.filter(r => names1[r.variant]);
+    $('exp1Table').innerHTML = `<tr><th>Variant</th><th>Kampe</th><th>Træfsikkerhed</th><th>Log loss</th><th>Δ log loss mod odds</th></tr>` + exp1.map(r => `<tr><td>${names1[r.variant]}</td><td>${(r.matches ?? 0).toLocaleString('da-DK')}</td><td>${pct(r.accuracy, 2)}</td><td>${num(r.log_loss, 5)}</td>${deltaCell(r.variant === 'odds_only' ? null : r.delta_log_loss_vs_odds, r.delta_log_loss_vs_odds_se)}</tr>`).join('');
+    const names2 = {odds_b365:'Bet365-odds alene', odds_pinnacle:'Pinnacle-odds alene', odds_average:'Markedsgennemsnit', odds_pinnacle_closing:'Pinnacle-lukkeodds (reference)', res_b365:'V3-model på Bet365', res_pinnacle:'V3-model på Pinnacle', res_b365_xg:'V3 på Bet365 + xG-form', res_pinnacle_xg:'V3 på Pinnacle + xG-form'};
+    const exp2 = data.experiments.pinnacle_xg;
+    $('exp2Table').innerHTML = exp2.length ? `<tr><th>Variant</th><th>Kampe</th><th>Træfsikkerhed</th><th>Log loss</th><th>Δ log loss mod Bet365</th></tr>` + exp2.map(r => `<tr><td>${names2[r.variant] || esc(r.variant)}</td><td>${(r.matches ?? 0).toLocaleString('da-DK')}</td><td>${pct(r.accuracy, 2)}</td><td>${num(r.log_loss, 5)}</td>${deltaCell(r.variant === 'odds_b365' ? null : r.delta_log_loss_vs_b365, r.delta_log_loss_vs_b365_se)}</tr>`).join('') + '<tr><td colspan="5" class="l sub">* = mere end 2 standardfejl fra nul</td></tr>' : '<tr><td>Eksperimentet er ikke kørt endnu.</td></tr>';
+  } catch (error) {
+    $('modelCards').innerHTML = `<div class="notice error">Kunne ikke hente modeller: ${esc(error.message)}</div>`;
+  }
+}
+
+/* ---------- Data ---------- */
+function ageLabel(raw) {
+  if (!raw) return '–';
+  const hours = (Date.now() - new Date(raw).getTime()) / 3.6e6;
+  if (!Number.isFinite(hours)) return '–';
+  return hours < 1 ? 'under 1 time siden' : hours < 48 ? `${Math.round(hours)} timer siden` : `${Math.round(hours / 24)} dage siden`;
+}
+
+async function loadStatus() {
+  try {
+    const s = state.status = await api('/api/status');
+    const c = s.cache || {}, h = s.history || {};
+    $('statusMetrics').innerHTML = [
+      ['Kommende kampe', c.upcoming ?? '–', `${c.upcoming_with_odds ?? 0} med Bet365-odds`],
+      ['Afsluttede i cache', c.finished ?? '–', 'bruges til at vurdere forudsigelser'],
+      ['Historiske kampe', (h.matches ?? 0).toLocaleString('da-DK'), `seneste ${esc(h.last_date ?? '–')}`],
+      ['Loggede forudsigelser', s.prediction_log?.rows ?? 0, `modeller: ${(s.models || []).join(', ').toUpperCase()}`],
+    ].map(([label, value, note]) => `<div class="metric"><div class="label">${label}</div><div class="value">${value}</div><div class="note">${note}</div></div>`).join('');
+    const sources = [
+      ['Historik (fixtures.csv)', 'football-data.co.uk, opdateres ved synkronisering og med "Hent nyeste fil nu"', h.modified_utc, `${(h.matches ?? 0).toLocaleString('da-DK')} kampe, ${esc(h.first_date)} → ${esc(h.last_date)}`],
+      ['Kamp- og oddscache', 'football-data.org + 5DollarFootball (Bet365-odds ved opslag og åbning)', c.modified_utc, `${c.odds_observations ?? 0} oddsobservationer`],
+      ['Understat xG', 'understat.com (gratis), kun brugt i eksperiment', s.understat?.modified_utc, s.understat?.exists ? 'hentet' : 'ikke hentet – kør src/collect_understat_xg.py'],
+      ['Forudsigelseslog', 'data/prediction_log.sqlite', s.prediction_log?.modified_utc, `${s.prediction_log?.rows ?? 0} rækker`],
+    ];
+    $('sourceTable').innerHTML = `<tr><th>Kilde</th><th class="l">Oprindelse</th><th>Sidst ændret</th><th class="l">Indhold</th></tr>` + sources.map(([name, origin, modified, content]) => `<tr><td>${name}</td><td class="l">${origin}</td><td>${ageLabel(modified)}</td><td class="l">${content}</td></tr>`).join('');
+    const syncs = c.last_syncs || [];
+    $('syncTable').innerHTML = syncs.length ? `<tr><th>Kilde</th><th class="l">Datasæt</th><th>Tidspunkt</th><th>Alder</th></tr>` + syncs.map(r => `<tr><td>${esc(r.data_source)}</td><td class="l">${esc(r.dataset)}</td><td>${shortDate(r.last_success_at_utc)}</td><td>${ageLabel(r.last_success_at_utc)}</td></tr>`).join('') : '<tr><td>Ingen synkroniseringer registreret.</td></tr>';
+  } catch (error) {
+    $('statusMetrics').innerHTML = `<div class="notice error">Kunne ikke hente status: ${esc(error.message)}</div>`;
+  }
+}
+
+/* ---------- Odds-dækning og synkronisering ---------- */
+const COVERAGE_PARTS = [
+  ['has_odds', 'har odds', 'var(--green)'],
+  ['fetchable', 'kan hentes nu', 'var(--blue)'],
+  ['no_odds_yet', 'uden Bet365-odds endnu', 'var(--amber)'],
+  ['not_listed', 'ikke klar hos udbyderen', '#3a4762'],
+];
+const LEAGUE_NAMES = {PL: 'Premier League', PD: 'La Liga', BL1: 'Bundesliga', SA: 'Serie A', FL1: 'Ligue 1'};
+const STATE_LABELS = {fetchable: ['kan hentes nu', 'blue'], not_listed: ['ikke klar hos udbyderen', ''], no_odds_yet: ['ingen Bet365-odds endnu', 'amber']};
+let cooldownTimer = null;
+
+function stackBar(counts, total) {
+  if (!total) return '';
+  return COVERAGE_PARTS.map(([key, label, color]) => counts[key]
+    ? `<div style="width:${(counts[key] / total * 100).toFixed(2)}%;background:${color}" title="${counts[key]} ${label}"></div>` : '').join('');
+}
+
+function pressesText(presses) {
+  return presses === 0 ? 'Alt, der kan hentes, er hentet.' : presses === 1 ? 'Tryk 1 gang mere.' : `Tryk ca. ${presses} gange mere.`;
+}
+
+function renderCoverage(c) {
+  state.coverage = c;
+  $('covHeadline').innerHTML = `${c.has_odds}<span class="sub" style="font-size:14px"> af ${c.total} har odds</span>`;
+  $('covBar').innerHTML = stackBar(c, c.total);
+  $('covFetchable').textContent = c.fetchable;
+  $('covFetchableText').textContent = c.fetchable ? `${pressesText(c.presses_needed)} De tidligste kampe hentes først.` : 'Intet at hente lige nu.';
+  $('covNotListed').textContent = c.not_listed;
+  $('covNoOdds').textContent = c.no_odds_yet;
+  updateSyncButton();
+  $('covTable').innerHTML = `<tr><th>Liga</th><th>Kommende</th><th>Har odds</th><th>Kan hentes</th><th>Ikke klar</th><th>Uden odds</th><th style="width:30%">Dækning</th></tr>` +
+    c.leagues.map(l => `<tr><td>${esc(l.league)}</td><td>${l.total}</td><td class="pos">${l.has_odds}</td><td>${l.fetchable || '–'}</td><td>${l.not_listed || '–'}</td><td>${l.no_odds_yet || '–'}</td><td><div class="stack small">${stackBar(l, l.total)}</div></td></tr>`).join('');
+  $('missingSummary').textContent = `Kampe uden odds (${c.fetchable + c.not_listed + c.no_odds_yet}) – tidligste først`;
+  $('missingTable').innerHTML = c.missing.length
+    ? `<tr><th>Kickoff</th><th class="l">Kamp</th><th class="l">Liga</th><th class="l">Status</th></tr>` + c.missing.map(m => {
+        const [label, color] = STATE_LABELS[m.state];
+        return `<tr><td>${shortDate(m.kickoff_at)}</td><td class="l">${esc(m.home_team)} – ${esc(m.away_team)}</td><td class="l">${esc(m.league)}</td><td class="l"><span class="badge ${color}">${label}</span></td></tr>`;
+      }).join('')
+    : '<tr><td>Alle kommende kampe har odds.</td></tr>';
+  // Matches tab: point at the missing odds.
+  const banner = $('oddsBanner');
+  if (c.fetchable + c.not_listed + c.no_odds_yet > 0) {
+    banner.innerHTML = `${c.total - c.has_odds} af ${c.total} kommende kampe mangler odds og kan derfor ikke forudsiges endnu` +
+      (c.fetchable ? ` · <b>${c.fetchable} kan hentes nu</b> (${pressesText(c.presses_needed).toLowerCase()}) <a href="#data" id="bannerLink">Gå til synkronisering →</a>` : '.');
+    banner.classList.remove('hidden');
+    const link = $('bannerLink');
+    if (link) link.addEventListener('click', event => { event.preventDefault(); showTab('data'); });
+  } else {
+    banner.classList.add('hidden');
+  }
+}
+
+async function loadCoverage() {
+  try { renderCoverage(await api('/api/odds-coverage')); } catch (_) { /* status tab shows API errors */ }
+}
+
+function cooldownLeft() {
+  let until = 0;
+  try { until = Number(localStorage.getItem('matchhub-cooldown-until')) || 0; } catch (_) {}
+  return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+
+function updateSyncButton() {
+  const button = $('syncButton'), left = cooldownLeft(), c = state.coverage;
+  if (state.syncing) return;
+  clearTimeout(cooldownTimer);
+  if (left > 0) {
+    button.disabled = true;
+    button.textContent = `Vent ${left} s`;
+    $('syncHint').textContent = 'football-data.org tillader 10 kald i minuttet – knappen åbner automatisk igen.';
+    cooldownTimer = setTimeout(updateSyncButton, 1000);
+    return;
+  }
+  button.disabled = false;
+  button.textContent = c && c.fetchable ? `Hent næste ${Math.min(c.calls_per_sync, c.fetchable)} odds` : 'Synkronisér';
+  $('syncHint').textContent = c ? (c.fetchable ? pressesText(c.presses_needed) : 'Ingen odds at hente lige nu – synkronisering henter stadig kampe og resultater.') : '';
+  $('syncCost').textContent = c && c.next_press_calls
+    ? `Næste tryk bruger ca. ${c.next_press_calls} af dine 5DollarFootball-kald (1 kampliste pr. liga + 1 pr. odds).`
+    : 'Næste tryk bruger ingen 5DollarFootball-kald.';
+  // Warn (without blocking) when the last known quota cannot cover a full press.
+  const odds = state.lastSync?.api_calls?.['5dollarfootballapi'];
+  const quotaLeft = odds && odds.quota_remaining != null ? Number(odds.quota_remaining) : null;
+  const resetPassed = odds?.quota_reset_utc && new Date(odds.quota_reset_utc) <= new Date();
+  if (c && quotaLeft != null && !resetPassed && quotaLeft < c.next_press_calls) {
+    $('syncCost').innerHTML = `<span class="neg">Din 5DollarFootball-kvote var ${quotaLeft} kald ved seneste tryk – ikke nok til et helt tryk (${c.next_press_calls} kald).</span> ${odds.quota_reset_utc ? `Den nulstilles ${dt(odds.quota_reset_utc, {hour:'2-digit', minute:'2-digit'})}.` : 'Vent til kvoten nulstilles.'}`;
+  }
+}
+
+function quotaText(info) {
+  if (!info || info.quota_remaining == null) return '';
+  const reset = info.quota_reset_utc && new Date(info.quota_reset_utc) > new Date() ? ` · nulstilles ${dt(info.quota_reset_utc, {hour:'2-digit', minute:'2-digit'})}` : '';
+  return `kvote tilbage: ${esc(info.quota_remaining)}${info.quota_limit ? ` af ${esc(info.quota_limit)}` : ''}${reset}`;
+}
+
+function renderLastSync(s) {
+  if (!s || s.status === 'none') return;
+  state.lastSync = s;
+  updateSyncButton();
+  const before = s.coverage_before, after = s.coverage_after;
+  const calls = Object.entries(s.api_calls || {}).map(([source, info]) =>
+    `${esc(source === '5dollarfootballapi' ? '5DollarFootball' : source)}: ${info.calls} kald${quotaText(info) ? ` <span class="muted">(${quotaText(info)})</span>` : ''}`).join('<br>') || 'Ingen eksterne kald.';
+  const cards = [
+    ['Odds hentet', s.odds_fetched, `${before.has_odds} → ${after.has_odds} kampe med odds`],
+    ['Tilbage at hente', after.fetchable, after.fetchable ? pressesText(after.presses_needed) : 'alt hentet'],
+    ['Kampe og resultater', s.matches.fetched ? `+${s.matches.new}` : '–', esc(s.matches.text)],
+    ['Historik', s.history.error ? '!' : `+${s.history.new_matches}`, esc(s.history.text)],
+  ];
+  $('lastSyncBody').innerHTML = `
+    <div class="sub" style="margin-bottom:10px">${shortDate(s.finished_utc)} · ${num(s.seconds, 1)} sek. ${s.status === 'partial' ? '· <span class="neg">delvist gennemført</span>' : '· <span class="pos">gennemført</span>'}</div>
+    <div class="grid4" style="margin-bottom:10px">${cards.map(([label, value, note]) => `<div class="metric"><div class="label">${label}</div><div class="value">${value}</div><div class="note">${note}</div></div>`).join('')}</div>
+    <div class="kv" style="max-width:560px"><span>API-kald brugt</span><span style="text-align:left">${calls}</span>
+      ${s.odds_leagues ? `<span>Odds hentet fra</span><span style="text-align:left">${s.odds_leagues.map(code => esc(LEAGUE_NAMES[code] || code)).join(', ') || 'ingen ligaer (intet at hente)'}</span>` : ''}</div>
+    ${(s.failures || []).map(f => `<div class="notice error">${esc(f)}</div>`).join('')}
+    ${s.odds_without_price ? `<div class="notice">${s.odds_without_price} kamp(e) havde ingen Bet365-pris endnu og prøves igen efter 6 timer.</div>` : ''}
+    <details><summary>Teknisk rapport</summary><pre class="report">${esc(s.technical_report || '')}</pre></details>`;
+}
+
+async function loadLastSync() {
+  try { renderLastSync(await api('/api/sync/last')); } catch (_) {}
+}
+
+async function syncData() {
+  state.syncing = true;
+  $('syncButton').disabled = true;
+  $('syncButton').textContent = 'Synkroniserer…';
+  $('syncHint').textContent = 'Henter historik, kampe og odds. Det tager typisk 10–60 sekunder.';
+  setApiStatus('Synkronisering kører…');
+  try {
+    const result = await api('/api/sync', {method: 'POST'});
+    renderLastSync(result);
+    if (result.cooldown_seconds) {
+      try { localStorage.setItem('matchhub-cooldown-until', String(Date.now() + result.cooldown_seconds * 1000)); } catch (_) {}
+    }
+    setApiStatus(result.status === 'ok' ? 'Synkronisering gennemført' : 'Synkronisering delvist gennemført', result.status === 'ok' ? 'ok' : 'error');
+    state.loaded = {};
+    state.syncing = false;
+    await Promise.all([loadCoverage(), loadStatus(), loadMatches(), loadPerformance()]);
+  } catch (error) {
+    $('lastSyncBody').innerHTML = `<div class="notice error">Synkronisering fejlede: ${esc(error.message)}</div>`;
+    setApiStatus('Synkronisering fejlede', 'error');
+  } finally {
+    state.syncing = false;
+    updateSyncButton();
+  }
+}
+
+/* ---------- Sæsonfil (football-data.co.uk) ---------- */
+function renderHistoryRefresh(r) {
+  if (!r) return;
+  const b = r.backfill || {};
+  const lines = [
+    `<b>${esc(r.text)}</b>`,
+    b.matches_added
+      ? `${b.matches_added} spillede kampe fik forudsigelser til Resultater (${b.from_workbook} med odds fra filen, ${b.from_5dollar} med gemte 5DollarFootball-odds).`
+      : 'Ingen nye spillede kampe at vurdere under Resultater.',
+    b.no_odds ? `${b.no_odds} spillet kamp(e) findes hverken med 5DollarFootball-odds eller i filen.` : '',
+    ...(b.skipped || []).slice(0, 3).map(line => `Sprunget over: ${esc(line)}`),
+  ].filter(Boolean);
+  $('historyResult').innerHTML = `<div class="notice${r.status === 'error' ? ' error' : ''}">${shortDate(r.finished_utc)} · ${num(r.seconds, 1)} sek.<br>${lines.join('<br>')}</div>`;
+}
+
+function renderHistory(h) {
+  const w = h.workbook, state_ = h.update_state || {};
+  $('histHeadline').innerHTML = w ? `${w.played_matches}<span class="sub" style="font-size:14px"> spillede kampe i filen</span>` : '–';
+  $('histFacts').innerHTML = w ? `
+    <span>Sæsonfil</span><span>${esc(w.file)}</span>
+    <span>Sidst hentet</span><span>${shortDate(w.downloaded_utc)} (${ageLabel(w.downloaded_utc)})</span>
+    <span>Seneste spillede kamp i filen</span><span>${esc(w.last_played_date || '–')}</span>
+    <span>Spillede kampe med Bet365-odds</span><span>${w.played_with_odds} af ${w.played_matches}</span>
+    <span>Seneste download</span><span>${state_.new_matches ?? 0} nye · ${state_.updated_matches ?? 0} opdaterede kampe</span>`
+    : '<span>Status</span><span>Filen er ikke hentet endnu – tryk på knappen.</span>';
+  renderHistoryRefresh(h.last_refresh);
+}
+
+async function loadHistory() {
+  try { renderHistory(await api('/api/history')); } catch (_) {}
+}
+
+async function refreshHistory() {
+  const button = $('historyButton');
+  button.disabled = true;
+  button.textContent = 'Henter fil…';
+  $('historyResult').innerHTML = '<div class="notice">Henter sæsonfilen og opdaterer spillede kampe. Det tager typisk 10–30 sekunder.</div>';
+  try {
+    renderHistoryRefresh(await api('/api/history/refresh', {method: 'POST'}));
+    state.loaded = {};
+    await Promise.all([loadHistory(), loadStatus(), loadPerformance(), loadMatches()]);
+  } catch (error) {
+    $('historyResult').innerHTML = `<div class="notice error">Kunne ikke hente filen: ${esc(error.message)}</div>`;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Hent nyeste fil nu';
+  }
+}
+
+/* ---------- Opstart ---------- */
+async function init() {
+  try {
+    const health = await api('/api/health');
+    const versions = Object.entries(health.available_models).filter(([, ok]) => ok).map(([v]) => v).sort().reverse();
+    $('version').innerHTML = versions.map(v => `<option value="${v}">Model ${v.toUpperCase()}${v === health.default_model ? ' (standard)' : ''}</option>`).join('');
+    $('version').value = health.default_model;
+  } catch (_) {
+    $('version').innerHTML = '<option value="v3">Model V3</option>';
+  }
+  ['version', 'league'].forEach(id => $(id).addEventListener('change', loadMatches));
+  ['sort', 'valueOnly'].forEach(id => $(id).addEventListener('change', renderMatches));
+  $('search').addEventListener('input', renderMatches);
+  $('refresh').addEventListener('click', loadMatches);
+  $('syncButton').addEventListener('click', syncData);
+  $('historyButton').addEventListener('click', refreshHistory);
+  $('resultModel').addEventListener('change', renderResultTable);
+  $('showSkipped').addEventListener('click', event => { event.preventDefault(); $('skippedBox').classList.toggle('hidden'); });
+  loadMatches();
+  loadPerformance();
+  loadCoverage();
+  const tabs = ['matches', 'results', 'models', 'data'];
+  let tab = location.hash.slice(1);
+  if (!tabs.includes(tab)) {
+    try { tab = localStorage.getItem('matchhub-tab'); } catch (_) {}
+  }
+  showTab(tabs.includes(tab) ? tab : 'matches');
+}
+init();
+</script>
+</body>
+</html>

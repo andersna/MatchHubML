@@ -1,0 +1,133 @@
+{
+  "artifact_name": "nn_market_residual_v3",
+  "created_utc": "2026-10-27T11:30:56.793085+00:00",
+  "model_class": "MarketResidualEnsemble",
+  "member_count": 5,
+  "architecture": {
+    "member": "logits = log(odds probabilities) + correction(x)",
+    "correction": [
+      30,
+      32,
+      "ReLU",
+      "Dropout(0.15)",
+      16,
+      "ReLU",
+      3
+    ],
+    "correction_last_layer_init": "zeros",
+    "ensemble": "mean of member softmax probabilities"
+  },
+  "feature_columns_in_order": [
+    "home_avg_goals_for",
+    "home_avg_goals_against",
+    "home_avg_points",
+    "away_avg_goals_for",
+    "away_avg_goals_against",
+    "away_avg_points",
+    "home_last5_goals_for",
+    "home_last5_goals_against",
+    "home_last5_points",
+    "away_last5_goals_for",
+    "away_last5_goals_against",
+    "away_last5_points",
+    "home_attack_strength",
+    "away_attack_strength",
+    "home_defense_strength",
+    "away_defense_strength",
+    "home_expected_goals",
+    "away_expected_goals",
+    "home_elo_k16",
+    "away_elo_k16",
+    "home_elo_k32",
+    "away_elo_k32",
+    "home_elo_k48",
+    "away_elo_k48",
+    "elo_difference_k16",
+    "elo_difference_k32",
+    "elo_difference_k48",
+    "odds_prob_home",
+    "odds_prob_draw",
+    "odds_prob_away"
+  ],
+  "feature_count": 30,
+  "market_columns": [
+    "odds_prob_home",
+    "odds_prob_draw",
+    "odds_prob_away"
+  ],
+  "class_to_index": {
+    "H": 0,
+    "D": 1,
+    "A": 2
+  },
+  "index_to_class": [
+    "H",
+    "D",
+    "A"
+  ],
+  "seeds": [
+    42,
+    123,
+    2026,
+    3407,
+    9876
+  ],
+  "optimizer": {
+    "name": "AdamW",
+    "learning_rate": 0.001,
+    "weight_decay": 0.01,
+    "batch_size": 256,
+    "epochs_by_seed": {
+      "42": 12,
+      "123": 10,
+      "2026": 3,
+      "3407": 4,
+      "9876": 1
+    },
+    "training_loss": "unweighted CrossEntropyLoss (no class weights)"
+  },
+  "epoch_selection": {
+    "method": "per seed: chronological 85/15 unique-date holdout; best epoch by unweighted validation CrossEntropyLoss, epoch 0 = market; patience 8; max 100; refit all rows",
+    "validation_cross_entropy_by_seed": {
+      "42": 0.9676623344421387,
+      "123": 0.967701256275177,
+      "2026": 0.967943549156189,
+      "3407": 0.96773362159729,
+      "9876": 0.9679520726203918
+    },
+    "subtrain_rows": 37206,
+    "validation_rows": 5968,
+    "subtrain_start": "2002-08-02",
+    "subtrain_end": "2023-02-26",
+    "validation_start": "2023-02-27",
+    "validation_end": "2026-10-19",
+    "market_only_validation_cross_entropy": 0.9687310457229614
+  },
+  "backtest": {
+    "source": "experiment_nn_market_residual.py, variant residual_27_ensemble, folds 2-3",
+    "accuracy": 0.53636,
+    "log_loss": 0.96876,
+    "odds_only_accuracy": 0.53716,
+    "odds_only_log_loss": 0.96909
+  },
+  "training_data": {
+    "path": "data\\odds_model_dataset_asof_day_v2.csv",
+    "sha256": "efefcf2736c01b8ea0714aec6ba6fb909fecd7e89034ecfd892680d6ee7cf7df",
+    "rows": 43174,
+    "start_date": "2002-08-02",
+    "end_date": "2026-10-19",
+    "unique_odds_match_keys": 43174
+  },
+  "odds_timestamp_caveat": "Historical odds have no documented snapshot timestamps; availability before kickoff is unverified.",
+  "runtime": {
+    "python": "3.12.10",
+    "pytorch": "2.14.1+cu132",
+    "numpy": "2.5.4",
+    "pandas": "3.0.6",
+    "device_used_for_training": "cuda"
+  },
+  "files": {
+    "weights": "model_state_dict.pt",
+    "preprocessing": "preprocessing.json"
+  }
+}
