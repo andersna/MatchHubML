@@ -26,6 +26,19 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LOG_PATH = PROJECT_ROOT / "data" / "prediction_log.sqlite"
 OUTCOMES = ("H", "D", "A")
 
+
+def season_start(match_date: str) -> int:
+    """First calendar year of the European season a date belongs to (seasons start in July)."""
+    year, month = int(match_date[:4]), int(match_date[5:7])
+    return year if month >= 7 else year - 1
+
+
+def match_identity(league: str, match_date: str, home_team: str, away_team: str) -> tuple[str, int, str, str]:
+    """A match key that survives rescheduling: each pairing is played once per league season,
+    so a match moved to another day keeps its logged predictions and picks."""
+    return (league, season_start(match_date), home_team, away_team)
+
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS predictions (
     prediction_id INTEGER PRIMARY KEY,
@@ -46,6 +59,8 @@ CREATE TABLE IF NOT EXISTS predictions (
     prob_home REAL NOT NULL,
     prob_draw REAL NOT NULL,
     prob_away REAL NOT NULL,
+    home_expected_goals REAL,
+    away_expected_goals REAL,
     UNIQUE (model_artifact, league, match_date, home_team, away_team, odds_observed_at_utc, odds_market)
 );
 CREATE INDEX IF NOT EXISTS ix_predictions_match
@@ -90,8 +105,18 @@ def _connect(path: Path) -> sqlite3.Connection:
     connection = sqlite3.connect(path, timeout=10)
     connection.row_factory = sqlite3.Row
     _migrate_add_odds_market(connection)
+    _migrate_add_expected_goals(connection)
     connection.executescript(SCHEMA)
     return connection
+
+
+def _migrate_add_expected_goals(connection: sqlite3.Connection) -> None:
+    """Logs from before the match's expected goals were stored (used for the game bot's score)."""
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(predictions)")}
+    if columns and "home_expected_goals" not in columns:
+        with connection:
+            connection.execute("ALTER TABLE predictions ADD COLUMN home_expected_goals REAL")
+            connection.execute("ALTER TABLE predictions ADD COLUMN away_expected_goals REAL")
 
 
 def log_predictions(records: Iterable[dict[str, Any]], *, path: Path = LOG_PATH) -> int:
@@ -99,7 +124,8 @@ def log_predictions(records: Iterable[dict[str, Any]], *, path: Path = LOG_PATH)
 
     Each record needs: source, model_version, model_artifact, league,
     match_date, kickoff_at, home_team, away_team, odds_observed_at_utc,
-    odds_market, odds (H, D, A) and probs (H, D, A). Returns the number of new rows.
+    odds_market, odds (H, D, A) and probs (H, D, A); optionally expected_goals
+    (home, away), the match's goal features. Returns the number of new rows.
     """
     now = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     rows = [
@@ -109,6 +135,7 @@ def log_predictions(records: Iterable[dict[str, Any]], *, path: Path = LOG_PATH)
             record.get("kickoff_at"), record["home_team"], record["away_team"],
             record["odds_observed_at_utc"], record["odds_market"],
             *map(float, record["odds"]), *map(float, record["probs"]),
+            *(map(float, record["expected_goals"]) if record.get("expected_goals") else (None, None)),
         )
         for record in records
     ]
@@ -121,35 +148,47 @@ def log_predictions(records: Iterable[dict[str, Any]], *, path: Path = LOG_PATH)
                 logged_at_utc, source, model_version, model_artifact, league, match_date,
                 kickoff_at, home_team, away_team, odds_observed_at_utc, odds_market,
                 odds_prob_home, odds_prob_draw, odds_prob_away,
-                prob_home, prob_draw, prob_away
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                prob_home, prob_draw, prob_away, home_expected_goals, away_expected_goals
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
-        return connection.total_changes - before
+        added = connection.total_changes - before
+        # A repeat of a row logged before expected goals were stored fills them in.
+        connection.executemany(
+            """UPDATE predictions SET home_expected_goals = ?, away_expected_goals = ?
+            WHERE home_expected_goals IS NULL AND model_artifact = ? AND league = ? AND match_date = ?
+              AND home_team = ? AND away_team = ? AND odds_observed_at_utc = ? AND odds_market = ?""",
+            [(row[17], row[18], row[3], row[4], row[5], row[7], row[8], row[9], row[10])
+             for row in rows if row[17] is not None],
+        )
+        return added
 
 
-def logged_matches(*, path: Path = LOG_PATH) -> set[tuple[str, str, str, str, str]]:
-    """(model_version, league, match_date, home_team, away_team) already in the log."""
+def logged_matches(*, path: Path = LOG_PATH) -> set[tuple]:
+    """(model_version, *match_identity) already in the log, whatever date the match had then."""
     if not Path(path).is_file():
         return set()
     with closing(_connect(path)) as connection:
-        return {tuple(row) for row in connection.execute(
+        return {(row[0], *match_identity(*row[1:])) for row in connection.execute(
             "SELECT DISTINCT model_version, league, match_date, home_team, away_team FROM predictions"
         )}
 
 
 def _finished_results(cache_path: Path) -> dict[tuple, dict[str, Any]]:
+    """Finished matches by match_identity, with the actual date and kickoff."""
     uri = "file:" + quote(Path(cache_path).resolve().as_posix(), safe="/:\\") + "?mode=ro"
     with closing(sqlite3.connect(uri, uri=True, timeout=5)) as connection:
         connection.row_factory = sqlite3.Row
+        columns = {row["name"] for row in connection.execute("PRAGMA table_info(matches)")}
+        kickoff = "kickoff_at" if "kickoff_at" in columns else "NULL AS kickoff_at"
         rows = connection.execute(
-            """SELECT league, match_date, home_team, away_team, home_score, away_score, result
+            f"""SELECT league, match_date, {kickoff}, home_team, away_team, home_score, away_score, result
             FROM matches
             WHERE data_source = 'football-data.org' AND upper(match_status) = 'FINISHED'
               AND result IN ('H', 'D', 'A')"""
         ).fetchall()
     return {
-        (row["league"], row["match_date"], row["home_team"], row["away_team"]): dict(row)
+        match_identity(row["league"], row["match_date"], row["home_team"], row["away_team"]): dict(row)
         for row in rows
     }
 
@@ -202,32 +241,44 @@ def evaluate(
         )]
     results = _finished_results(cache_path)
     if fallback_results is not None:
-        missing = sorted({
-            (row["league"], row["match_date"], row["home_team"], row["away_team"]) for row in predictions
-        } - set(results))
+        missing: dict[tuple, tuple] = {}
+        for row in predictions:
+            key = (row["league"], row["match_date"], row["home_team"], row["away_team"])
+            if match_identity(*key) not in results:
+                missing.setdefault(match_identity(*key), key)
         if missing:
-            results.update(fallback_results(missing))
+            found = fallback_results(sorted(missing.values()))
+            results.update({match_identity(*key): result for key, result in found.items()})
 
-    # Latest prediction per model and match (later rows overwrite earlier ones).
+    # Latest prediction per model and match (later rows overwrite earlier ones). Matches are
+    # keyed by match_identity, so a rescheduled match keeps its predictions; a live prediction
+    # logged after the actual kickoff (made while the cache still had the old date) is ignored.
     by_match: dict[tuple, dict[str, Any]] = {}
     pending = set()
     for row in predictions:
-        key = (row["league"], row["match_date"], row["home_team"], row["away_team"])
-        if key not in results:
-            pending.add(key)
+        identity = match_identity(row["league"], row["match_date"], row["home_team"], row["away_team"])
+        result = results.get(identity)
+        if result is None:
+            pending.add(identity)
             continue
-        entry = by_match.setdefault(key, {"models": {}})
+        if row["source"] == "live" and result.get("kickoff_at") and row["logged_at_utc"] >= result["kickoff_at"]:
+            continue
+        entry = by_match.setdefault(identity, {"models": {}})
+        earlier = entry["models"].get(row["model_version"])
+        if earlier and earlier["source"] == "live" and row["source"] == "backfill":
+            continue  # a real pre-kickoff prediction beats a reconstruction
         entry["models"][row["model_version"]] = row
 
     scored = []
-    for key, entry in by_match.items():
-        result = results[key]
+    for identity, entry in by_match.items():
+        result = results[identity]
         first = next(iter(entry["models"].values()))
         odds = [first["odds_prob_home"], first["odds_prob_draw"], first["odds_prob_away"]]
         odds_ll, odds_brier, odds_hit = _scores(odds, result["result"])
         item = {
-            "league": key[0], "match_date": key[1], "home_team": key[2], "away_team": key[3],
-            "kickoff_at": first["kickoff_at"],
+            "league": identity[0], "match_date": result.get("match_date") or first["match_date"],
+            "home_team": identity[2], "away_team": identity[3],
+            "kickoff_at": result.get("kickoff_at") or first["kickoff_at"],
             "home_score": result["home_score"], "away_score": result["away_score"],
             "result": result["result"],
             "odds": {"probs": odds, "log_loss": odds_ll, "brier": odds_brier, "hit": odds_hit},

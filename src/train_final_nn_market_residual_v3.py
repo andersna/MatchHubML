@@ -2,8 +2,9 @@
 
 Each member predicts logits = log(market probabilities) + correction(inputs),
 with the correction's last layer initialised to zero, so an untrained member
-is exactly the Bet365 market. Inputs are the same 30 columns as v1/v2 (27
-sports features + 3 odds probabilities). There are no class weights.
+is exactly the Bet365 market. Inputs are the 30 v1/v2 columns (27 sports
+features + 3 odds probabilities) plus 10 Understat xG form columns
+(V3_FEATURES). There are no class weights.
 
 For every seed, the epoch count is chosen on a chronological 85/15 holdout of
 unique dates by unweighted CrossEntropyLoss, with the untouched market as
@@ -40,6 +41,7 @@ from experiment_nn_odds_asof_day_v1 import (
 )
 from nn_preprocessing import MedianStandardPreprocessor
 import train_final_nn_odds_asof_day_v1 as trainer
+from xg_features import XG_FEATURES, load_xg_history
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -59,7 +61,11 @@ PATIENCE = 8
 LEARNING_RATE = 0.001
 WEIGHT_DECAY = 0.01
 VALIDATION_FRACTION = 0.15
-ODDS_INDICES = [MODEL_FEATURES.index(name) for name in ODDS_FEATURES]
+# The 30 v1/v2 inputs plus Understat xG form. xG is NaN before 2014-15 and
+# for teams without xG history; the saved median imputer fills it. Artifacts
+# trained before xG was added keep MODEL_FEATURES and still load.
+V3_FEATURES = MODEL_FEATURES + XG_FEATURES
+ODDS_INDICES = [V3_FEATURES.index(name) for name in ODDS_FEATURES]
 
 
 class MarketResidualEnsemble(nn.Module):
@@ -80,6 +86,13 @@ class MarketResidualEnsemble(nn.Module):
         # Average in float64: float32 member averages can miss a sum of 1 by ~1e-7.
         mean = torch.stack(probs).double().mean(dim=0)
         return mean / mean.sum(dim=1, keepdim=True)
+
+
+def add_xg_features(frame: pd.DataFrame) -> pd.DataFrame:
+    """Return ``frame`` with XG_FEATURES computed as of each match date."""
+    result = frame.copy()
+    result[XG_FEATURES] = load_xg_history().features_for(result).to_numpy()
+    return result
 
 
 def _output_paths(artifact_dir: Path) -> tuple[Path, Path, Path]:
@@ -128,7 +141,7 @@ def _train_epoch(model, optimizer, x, market_log, y, league):
 
 def _new_member(seed: int):
     _seed_everything(seed)
-    model = MarketResidualNet(len(MODEL_FEATURES), n_leagues=1, embedding_dim=0).to(DEVICE)
+    model = MarketResidualNet(len(V3_FEATURES), n_leagues=1, embedding_dim=0).to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     return model, optimizer
 
@@ -139,7 +152,7 @@ def select_epochs(frame: pd.DataFrame) -> tuple[dict[int, tuple[int, float]], di
     split = int(len(dates) * (1.0 - VALIDATION_FRACTION))
     subtrain = frame[frame["date"].dt.date.isin(dates[:split])]
     validation = frame[frame["date"].dt.date.isin(dates[split:])]
-    preprocessor = MedianStandardPreprocessor(list(MODEL_FEATURES))
+    preprocessor = MedianStandardPreprocessor(list(V3_FEATURES))
     preprocessor.fit(subtrain)
     x_train, market_train, y_train = _tensors(preprocessor, subtrain)
     x_val, market_val, y_val = _tensors(preprocessor, validation)
@@ -181,11 +194,11 @@ def select_epochs(frame: pd.DataFrame) -> tuple[dict[int, tuple[int, float]], di
 
 
 def train_final(frame: pd.DataFrame, epochs_by_seed: dict[int, int]):
-    preprocessor = MedianStandardPreprocessor(list(MODEL_FEATURES))
+    preprocessor = MedianStandardPreprocessor(list(V3_FEATURES))
     preprocessor.fit(frame)
     x, market_log, y = _tensors(preprocessor, frame)
     league = torch.zeros(len(x), dtype=torch.long, device=DEVICE)
-    ensemble = MarketResidualEnsemble(len(MODEL_FEATURES), len(SEEDS))
+    ensemble = MarketResidualEnsemble(len(V3_FEATURES), len(SEEDS))
     for index, seed in enumerate(SEEDS):
         model, optimizer = _new_member(seed)
         for _epoch in range(epochs_by_seed[seed]):
@@ -212,12 +225,14 @@ def save_artifact(
         "member_count": len(SEEDS),
         "architecture": {
             "member": "logits = log(odds probabilities) + correction(x)",
-            "correction": [len(MODEL_FEATURES), 32, "ReLU", "Dropout(0.15)", 16, "ReLU", 3],
+            "correction": [len(V3_FEATURES), 32, "ReLU", "Dropout(0.15)", 16, "ReLU", 3],
             "correction_last_layer_init": "zeros",
             "ensemble": "mean of member softmax probabilities",
         },
-        "feature_columns_in_order": list(MODEL_FEATURES),
-        "feature_count": len(MODEL_FEATURES),
+        "feature_columns_in_order": list(V3_FEATURES),
+        "feature_count": len(V3_FEATURES),
+        "xg_source": "data/understat_matches.csv (src/collect_understat_xg.py); NaN -> saved median",
+        "xg_training_coverage": float(frame["home_xg_for_last5"].notna().mean()),
         "market_columns": list(ODDS_FEATURES),
         "class_to_index": dict(LABEL_TO_INDEX),
         "index_to_class": ["H", "D", "A"],
@@ -286,8 +301,8 @@ def main() -> None:
         "Oddsbegrænsning: historiske odds mangler dokumenterede snapshot-tidspunkter; "
         "før-kickoff-tilgængelighed er ikke verificeret."
     )
-    frame = trainer.validate_dataset(DATASET_PATH)
-    print(f"Validerede træningskampe: {len(frame):,}; features: {len(MODEL_FEATURES)}")
+    frame = add_xg_features(trainer.validate_dataset(DATASET_PATH))
+    print(f"Validerede træningskampe: {len(frame):,}; features: {len(V3_FEATURES)}")
     print("Epokevalg pr. seed (kronologisk 85/15):")
     selected, split_info = select_epochs(frame)
     ensemble, preprocessor = train_final(frame, {seed: epoch for seed, (epoch, _) in selected.items()})

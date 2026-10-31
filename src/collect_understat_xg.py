@@ -140,6 +140,15 @@ def build_team_mapping(understat: pd.DataFrame, fixtures: pd.DataFrame) -> dict[
 
 
 def main() -> None:
+    understat, mapped = update_understat_matches()
+    print(
+        f"Understat: {len(understat):,} kampe hentet; {len(mapped):,} med mappede holdnavne "
+        f"({mapped['is_result'].sum():,} spillede). Output: {OUTPUT_PATH}"
+    )
+
+
+def update_understat_matches() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Download what is due and rewrite OUTPUT_PATH; returns (all, mapped) matches."""
     understat = collect_raw()
     fixtures = pd.read_csv(FIXTURES_PATH, low_memory=False)
     mapping = build_team_mapping(understat, fixtures)
@@ -151,11 +160,11 @@ def main() -> None:
         "home_goals", "away_goals", "home_xg", "away_xg",
         "understat_home", "understat_away", "understat_id", "kickoff_utc",
     ]
-    mapped[columns].sort_values(["date", "league", "home_team"]).to_csv(OUTPUT_PATH, index=False)
-    print(
-        f"Understat: {len(understat):,} kampe hentet; {len(mapped):,} med mappede holdnavne "
-        f"({mapped['is_result'].sum():,} spillede). Output: {OUTPUT_PATH}"
-    )
+    # Write next to the target and swap, so readers never see a half-written file.
+    temporary = OUTPUT_PATH.with_suffix(".tmp")
+    mapped[columns].sort_values(["date", "league", "home_team"]).to_csv(temporary, index=False)
+    temporary.replace(OUTPUT_PATH)
+    return understat, mapped
 
 
 if __name__ == "__main__":

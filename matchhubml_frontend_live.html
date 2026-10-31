@@ -20,7 +20,7 @@ nav{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:18px;
 nav button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
 nav button[aria-selected=true]{color:var(--txt);border-bottom-color:var(--green)}
 nav .count{font-size:11px;background:var(--p2);border-radius:99px;padding:1px 7px;margin-left:5px;color:var(--muted)}
-select,button.btn,input[type=search]{background:var(--p);border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:9px;font:inherit}
+select,button.btn,input[type=search],input[type=text],input[type=password]{background:var(--p);border:1px solid var(--line);color:var(--txt);padding:8px 10px;border-radius:9px;font:inherit}
 button.btn{cursor:pointer}button.btn:hover{border-color:var(--blue)}button.btn:disabled{opacity:.55;cursor:wait}
 button.primary{background:#14324f;border-color:#2a5d8f}
 label.check{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;cursor:pointer}
@@ -37,7 +37,7 @@ label.check{display:flex;align-items:center;gap:6px;color:var(--muted);font-size
 .top{display:flex;justify-content:space-between;gap:10px;font-size:11px;margin-bottom:8px}
 .league{color:var(--blue);font-weight:750;text-transform:uppercase;letter-spacing:.5px}
 .teams{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:12px;font-weight:700}
-.teams span:last-child{text-align:right}.vs{font-size:10px;color:var(--muted);border:1px solid var(--line);padding:3px 6px;border-radius:7px;font-weight:500}
+.teams span:last-child{text-align:right}.teams small{display:block;font-size:11px;font-weight:500;color:var(--muted);margin-top:2px}.teams small.pos{color:var(--green)}.vs{font-size:10px;color:var(--muted);border:1px solid var(--line);padding:3px 6px;border-radius:7px;font-weight:500}
 .outcomes{display:grid;gap:7px}
 .orow{display:grid;grid-template-columns:72px 1fr 128px;gap:10px;align-items:center}
 .olabel{font-size:12px;color:var(--muted)}.olabel b{color:var(--txt);display:block;font-size:13px}
@@ -74,6 +74,23 @@ td.l,th.l{text-align:left}
 pre.report{white-space:pre-wrap;font-size:11px;color:var(--muted);max-height:320px;overflow:auto;margin:10px 0 0}
 svg text{fill:var(--muted);font-size:10px}
 .covhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px}.bignum{font-size:30px;font-weight:800;letter-spacing:-1px}.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#0b1324;border:1px solid #24314b}.stack.small{height:8px}.stack div{height:100%}.covgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}.covbox{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:12px;font-size:12px;color:var(--muted)}.covbox b{color:var(--txt);font-size:13px}.covn{font-size:26px;font-weight:800;min-width:42px;line-height:1.1}.covbox.blue .covn{color:var(--blue)}.covbox.amber .covn{color:var(--amber)}.covbox.grey .covn{color:var(--muted)}.syncrow{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.synchint{font-weight:700;margin-bottom:2px}button.big{padding:12px 20px;font-size:15px;font-weight:700;min-width:190px}#oddsBanner a{color:var(--blue)}
+.auth{max-width:420px;margin:30px auto}.auth .row{display:grid;gap:8px;margin:12px 0}.auth .btns{display:flex;gap:8px}.auth .btns .btn{flex:1}
+.weeknav{display:flex;align-items:center;gap:6px}.weeknav b{min-width:150px;text-align:center}
+.choices{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.choice{background:#0b1324;border:1px solid var(--line);border-radius:11px;color:var(--txt);padding:10px 6px;font:inherit;cursor:pointer;display:grid;gap:1px;justify-items:center}
+.choice b{font-size:20px;line-height:1.1}.choice small{font-size:11px;color:var(--muted)}
+.choice:hover{border-color:var(--blue)}.choice:disabled{opacity:.6;cursor:wait}
+.choice[aria-pressed=true]{background:#123a30;border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}.choice[aria-pressed=true] small{color:var(--green)}
+.scorebox{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)}
+.stepper{display:flex;align-items:center;gap:6px}.stepper b{min-width:22px;text-align:center;font-size:18px}
+.step{width:30px;height:30px;border-radius:8px;border:1px solid var(--line);background:#0b1324;color:var(--txt);font:inherit;font-weight:700;cursor:pointer}.step:hover{border-color:var(--blue)}
+.linkbtn{background:none;border:0;color:var(--blue);font:inherit;font-size:12px;cursor:pointer;padding:0}
+.card.draft{border-color:#2a5d8f}.card.locked{opacity:.95}
+.scores{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:12px;align-items:center}
+.scores .who{color:var(--muted)}.scores span:nth-child(even){text-align:right}
+.result{font-size:18px;font-weight:800;text-align:center;margin:-4px 0 10px}
+tr.me td{color:var(--green)}tr.bot td{color:var(--violet)}
+.leagueform{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.leagueform input{flex:1 1 160px}
 footer{text-align:center;color:#71809f;font-size:11px;margin-top:24px}
 @media(max-width:900px){.covgrid{grid-template-columns:1fr}.grid4{grid-template-columns:repeat(2,1fr)}.matches,.models{grid-template-columns:1fr}}
 @media(max-width:480px){.wrap{padding:16px 12px}.orow{grid-template-columns:64px 1fr 92px}.metric .value{font-size:19px}}
@@ -88,6 +105,7 @@ footer{text-align:center;color:#71809f;font-size:11px;margin-top:24px}
 
 <nav role="tablist">
   <button role="tab" aria-selected="true" data-tab="matches">Kampe<span class="count" id="tabCountMatches">–</span></button>
+  <button role="tab" aria-selected="false" data-tab="game">Liga</button>
   <button role="tab" aria-selected="false" data-tab="results">Resultater<span class="count" id="tabCountResults">–</span></button>
   <button role="tab" aria-selected="false" data-tab="models">Modeller</button>
   <button role="tab" aria-selected="false" data-tab="data">Data &amp; synkronisering</button>
@@ -119,6 +137,46 @@ footer{text-align:center;color:#71809f;font-size:11px;margin-top:24px}
   <div id="skippedBox" class="panel hidden"><h3>Kampe der ikke kunne forudsiges</h3><div class="tablewrap"><table id="skippedTable"></table></div></div>
   <div id="matchState" class="state">Henter kampe…</div>
   <div id="matchList"></div>
+</section>
+
+<!-- LIGA -->
+<section id="tab-game" role="tabpanel" class="hidden">
+  <div id="gameAuth" class="panel auth hidden">
+    <h3>Kan du slå modellen?</h3>
+    <div class="sub">Gæt 1, X eller 2 – og gerne det præcise resultat – i ugens kampe før kickoff. 1 point for rigtigt 1/X/2, +2 for præcist resultat. Du dyster mod de andre og mod MatchHub V3, hvis bud først vises ved kickoff.</div>
+    <form id="authForm" class="row" autocomplete="on">
+      <input type="text" id="authUser" placeholder="Brugernavn" aria-label="Brugernavn" autocomplete="username" required>
+      <input type="password" id="authPass" placeholder="Adgangskode (mindst 6 tegn)" aria-label="Adgangskode" autocomplete="current-password" required>
+      <div class="btns"><button class="btn primary" type="submit" data-action="login">Log ind</button><button class="btn" type="submit" data-action="register">Opret bruger</button></div>
+    </form>
+    <div id="authMessage"></div>
+  </div>
+
+  <div id="gameArea" class="hidden">
+    <div class="toolbar">
+      <div class="weeknav"><button class="btn" id="weekPrev" type="button" aria-label="Forrige uge">◀</button><b id="weekLabel">–</b><button class="btn" id="weekNext" type="button" aria-label="Næste uge">▶</button></div>
+      <button class="btn" id="weekNow" type="button">Denne uge</button>
+      <select id="gameLeagueFilter" aria-label="Liga"><option value="">Alle ligaer</option><option>Premier League</option><option>La Liga</option><option>Bundesliga</option><option>Serie A</option><option>Ligue 1</option></select>
+      <span class="grow"></span>
+      <span class="sub" id="gameUser"></span>
+      <button class="btn" id="logoutButton" type="button">Log ud</button>
+    </div>
+    <div class="grid4" id="gameMetrics"></div>
+    <div class="notice">Tryk <b>1</b> (hjemmesejr), <b>X</b> (uafgjort) eller <b>2</b> (udesejr), og gæt evt. det præcise resultat med + og −. Buddet gemmes automatisk, og du kan ændre det indtil kickoff. <b>1 point</b> for rigtigt 1/X/2 og <b>+2</b> hvis resultatet også er præcist (højst 3). MatchHub V3 vælger det udfald, modellen tror mest på, og det mest sandsynlige resultat for det udfald – dens bud vises først ved kickoff.</div>
+    <div id="gameState" class="state">Henter ugens kampe…</div>
+    <div id="gameList"></div>
+
+    <div class="panel" style="margin-top:16px">
+      <div class="covhead"><div><h3 style="margin-bottom:2px">Stilling</h3><div class="sub" id="tableScope"></div></div><select id="tableLeague" aria-label="Liga i stillingen"></select></div>
+      <div class="tablewrap"><table id="standings"></table></div>
+      <div class="sub" id="inviteNote" style="margin-top:8px"></div>
+      <div class="leagueform">
+        <input type="text" id="newLeagueName" placeholder="Navn på ny liga" aria-label="Navn på ny liga" maxlength="40"><button class="btn" id="createLeague" type="button">Opret liga</button>
+        <input type="text" id="joinCode" placeholder="Invitationskode" aria-label="Invitationskode" maxlength="6"><button class="btn" id="joinLeague" type="button">Deltag</button>
+      </div>
+      <div id="leagueMessage"></div>
+    </div>
+  </div>
 </section>
 
 <!-- RESULTATER -->
@@ -221,8 +279,10 @@ function setApiStatus(text, kind='') { $('apiStatus').className = `status ${kind
 /* ---------- Tabs ---------- */
 document.querySelectorAll('nav button').forEach(button => button.addEventListener('click', () => showTab(button.dataset.tab)));
 function showTab(name) {
+  if (name === 'matches' && state.hideModel) name = 'game';
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
   document.querySelectorAll('[role=tabpanel]').forEach(p => p.classList.toggle('hidden', p.id !== `tab-${name}`));
+  if (name === 'game') loadGame();
   if (name === 'results') loadPerformance();
   if (name === 'models' && !state.loaded.models) loadModels();
   if (name === 'data') { loadStatus(); loadCoverage(); loadLastSync(); loadHistory(); }
@@ -250,14 +310,23 @@ function outcomeRows(m) {
   }).join('');
 }
 
-function featureTable(features) {
+const FORM_RATING_HELP = 'Formrating: Elo hvor målforskel tæller med, og hvor halvdelen af afstanden til 1500 nulstilles hver sommer, så denne sæsons resultater vejer tungest. 1500 = gennemsnit. Kun til visning – modellerne bruger den ikke.';
+function formRatingLine(m, side) {
+  const own = m.form_rating?.[side], other = m.form_rating?.[side === 'home' ? 'away' : 'home'];
+  if (own == null) return '';
+  return `<small class="${other != null && own > other ? 'pos' : ''}" title="${esc(FORM_RATING_HELP)}">Formrating ${num(own, 0)}</small>`;
+}
+
+function featureTable(features, formRating) {
   const rows = FEATURE_GROUPS.map(([group, items]) => `<tr><th class="l" colspan="3" style="padding-top:10px;color:var(--txt)">${group}</th></tr>` + items.map(([key, label]) => {
     const home = features[`home_${key}`], away = features[`away_${key}`];
     const better = key.includes('against') ? (home < away ? 'h' : home > away ? 'a' : '') : (home > away ? 'h' : home < away ? 'a' : '');
     return `<tr><td class="${better === 'h' ? 'pos' : ''}">${num(home, key.startsWith('elo') ? 0 : 2)}</td><td>${label}</td><td class="${better === 'a' ? 'pos' : ''}">${num(away, key.startsWith('elo') ? 0 : 2)}</td></tr>`;
   }).join('')).join('');
   const diffs = ['k16','k32','k48'].map(k => `${k.toUpperCase()}: ${signed(features[`elo_difference_${k}`], 0)}`).join(' · ');
-  return `<table class="ftable"><tr><th>Hjemme</th><th style="text-align:center">Feature</th><th>Ude</th></tr>${rows}</table><div class="sub" style="margin-top:6px">Elo-forskel (hjemme − ude) ${diffs}. Grøn = bedste værdi.</div>`;
+  const fh = formRating?.home, fa = formRating?.away;
+  const formRow = fh == null || fa == null ? '' : `<tr><th class="l" colspan="3" style="padding-top:10px;color:var(--txt)">Formrating (kun visning)</th></tr><tr title="${esc(FORM_RATING_HELP)}"><td class="${fh > fa ? 'pos' : ''}">${num(fh, 0)}</td><td>Formrating</td><td class="${fa > fh ? 'pos' : ''}">${num(fa, 0)}</td></tr>`;
+  return `<table class="ftable"><tr><th>Hjemme</th><th style="text-align:center">Feature</th><th>Ude</th></tr>${formRow}${rows}</table><div class="sub" style="margin-top:6px">Elo-forskel (hjemme − ude) ${diffs}. Elo vægter flere sæsoner; formratingen vægter denne sæson. Grøn = bedste værdi.</div>`;
 }
 
 function modelComparison(m) {
@@ -275,12 +344,12 @@ function renderCard(m) {
   ].join('');
   return `<article class="card">
     <div class="top"><span class="league">${esc(m.league)}</span><span class="muted">${kickoffLabel(m.kickoff_at)}</span></div>
-    <div class="teams"><span>${esc(m.home_team)}</span><span class="vs">VS</span><span>${esc(m.away_team)}</span></div>
+    <div class="teams"><span>${esc(m.home_team)}${formRatingLine(m, 'home')}</span><span class="vs">VS</span><span>${esc(m.away_team)}${formRatingLine(m, 'away')}</span></div>
     <div class="outcomes">${outcomeRows(m)}</div>
     <div class="badges">${badges}</div>
     <details><summary>Alle modeller og features</summary>
       <div style="margin-top:8px">${modelComparison(m)}</div>
-      <div style="margin-top:12px">${featureTable(m.features)}</div>
+      <div style="margin-top:12px">${featureTable(m.features, m.form_rating)}</div>
       <div class="sub" style="margin-top:8px">${esc(m.odds_source || 'Odds')} hentet ${shortDate(m.odds_observed_at_utc)}.</div>
     </details>
   </article>`;
@@ -314,6 +383,7 @@ function renderMatches() {
 }
 
 async function loadMatches() {
+  if (state.hideModel) return;  // /api/matches is refused while the league hides the model
   const current = ++requestNumber;
   $('refresh').disabled = true;
   $('matchState').textContent = 'Henter kampe og beregner forudsigelser…';
@@ -348,6 +418,250 @@ async function loadMatches() {
   } finally {
     if (current === requestNumber) $('refresh').disabled = false;
   }
+}
+
+/* ---------- Liga ---------- */
+const game = {user: null, leagues: [], week: null, round: null, table: null, timers: new Map()};
+const SAVE_DELAY_MS = 600;  // score steppers save after a short pause, so several taps are one call
+const matchKey = m => [m.league, m.match_date, m.home_team, m.away_team].join('|');
+const postJson = (path, body, method='POST') => api(path, {method, headers:{'Content-Type':'application/json', Accept:'application/json'}, body: JSON.stringify(body)});
+const outcomeOf = (home, away) => home > away ? 'H' : home === away ? 'D' : 'A';
+const hasScore = entry => entry && entry.home_goals != null && entry.away_goals != null;
+
+function entryLabel(entry) {
+  if (!entry) return '<span class="muted">intet bud</span>';
+  const [, short, long] = OUTCOMES.find(([k]) => k === entry.pick);
+  return `${short} · ${long}${hasScore(entry) ? ` · <b>${entry.home_goals}–${entry.away_goals}</b>` : ''}`;
+}
+
+function weekText(week) {
+  const [year, number] = week.split('-W').map(Number);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - (jan4.getUTCDay() || 7) + 1 + (number - 1) * 7);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return `Uge ${number} · ${dt(monday, {day:'numeric', month:'short'})}–${dt(sunday, {day:'numeric', month:'short'})}`;
+}
+
+function scoreBox(key, entry) {
+  const step = (side, delta, label) => `<button type="button" class="step" data-key="${esc(key)}" data-side="${side}" data-delta="${delta}" aria-label="${label}">${delta > 0 ? '+' : '−'}</button>`;
+  const value = side => hasScore(entry) ? entry[`${side}_goals`] : '–';
+  return `<div class="scorebox">
+      <span class="sub">Præcist resultat <b class="pos">+2</b></span>
+      <div class="stepper">${step('home', -1, 'Færre hjemmemål')}<b>${value('home')}</b>${step('home', 1, 'Flere hjemmemål')}</div>
+      <span class="muted">–</span>
+      <div class="stepper">${step('away', -1, 'Færre udemål')}<b>${value('away')}</b>${step('away', 1, 'Flere udemål')}</div>
+      ${hasScore(entry) ? `<button type="button" class="linkbtn" data-clear="${esc(key)}">Ryd</button>` : ''}
+    </div>`;
+}
+
+function gameCard(m) {
+  const key = matchKey(m), head = `<div class="top"><span class="league">${esc(m.league)}</span><span class="muted">${kickoffLabel(m.kickoff_at)}</span></div>
+    <div class="teams"><span>${esc(m.home_team)}</span><span class="vs">VS</span><span>${esc(m.away_team)}</span></div>`;
+  if (!m.locked) {
+    const e = m.my_entry;
+    const choices = OUTCOMES.map(([k, short, long]) => `<button type="button" class="choice" data-key="${esc(key)}" data-pick="${k}" aria-pressed="${e?.pick === k}"><b>${short}</b><small>${long}</small></button>`).join('');
+    const note = m.saving ? '<span class="badge amber">Gemmer…</span>' : e ? `<span class="badge green">Dit bud: ${entryLabel(e)}</span>` : '<span class="badge">Vælg et resultat</span>';
+    return `<article class="card ${e ? '' : 'draft'}" data-card="${esc(key)}">${head}<div class="choices">${choices}</div>${scoreBox(key, e)}<div class="badges">${note}<span class="badge">Låses ${kickoffLabel(m.kickoff_at)}</span></div><div class="cardmsg"></div></article>`;
+  }
+  const result = m.result ? `<div class="result">${m.home_score}–${m.away_score}</div>` : '<div class="sub" style="text-align:center;margin-bottom:10px">I gang eller afventer resultat</div>';
+  const earned = pointsValue => pointsValue == null ? '' : pointsValue > 1 ? ' <span class="hit">✓✓ +' + pointsValue + '</span>' : pointsValue ? ' <span class="hit">✓ +1</span>' : ' <span class="miss">✗</span>';
+  const bot = m.bot_entry;
+  const verdict = m.result && m.my_entry && bot ? (m.my_points > m.bot_points ? ['green', 'Du slog modellen'] : m.my_points < m.bot_points ? ['amber', 'Modellen vandt'] : ['', 'Lige med modellen']) : null;
+  return `<article class="card locked">${head}${result}
+    <div class="scores">
+      <span class="who">Dig</span><span>${entryLabel(m.my_entry)}${earned(m.my_points)}</span>
+      <span class="who">MatchHub V3</span><span>${bot ? `${entryLabel(bot)} <span class="muted">(${pct(bot.probability, 0)})</span>` : entryLabel(null)}${earned(m.bot_points)}</span>
+    </div>
+    <div class="badges"><span class="badge">🔒 Låst</span>${verdict ? `<span class="badge ${verdict[0]}">${verdict[1]}</span>` : ''}</div>
+  </article>`;
+}
+
+function renderGameMetrics() {
+  const s = game.round?.summary, me = game.table?.rows.find(r => r.player === game.user);
+  if (!s) return;
+  const diff = s.my_points - s.bot_points_same_matches;
+  $('gameMetrics').innerHTML = [
+    ['Point denne uge', s.scored ? s.my_points : '–', `${s.scored} afgjorte kampe · ${s.exact} præcise resultater`],
+    ['Mod MatchHub V3', s.scored ? `${diff > 0 ? '+' : diff < 0 ? '−' : ''}${Math.abs(diff)}` : '–', `modellen: ${s.bot_points_same_matches} point på de samme kampe`],
+    ['Bud afgivet', `${s.entered}/${game.round.matches.length}`, `${s.open} kampe er stadig åbne`],
+    ['Placering', me ? `${me.rank}/${game.table.rows.length}` : '–', game.table ? esc(game.table.league) : ''],
+  ].map(([label, value, note]) => `<div class="metric"><div class="label">${label}</div><div class="value">${value}</div><div class="note">${note}</div></div>`).join('');
+}
+
+function renderRound() {
+  const filter = $('gameLeagueFilter').value;
+  const list = (game.round?.matches || []).filter(m => !filter || m.league === filter);
+  $('weekLabel').textContent = game.week ? weekText(game.week) : '–';
+  renderGameMetrics();
+  if (!list.length) {
+    $('gameList').innerHTML = '';
+    $('gameState').textContent = game.round?.matches.length ? 'Ingen kampe i den valgte liga denne uge.' : 'Ingen kampe i denne uge. Kampe hentes under "Data & synkronisering".';
+    $('gameState').classList.remove('hidden');
+    return;
+  }
+  $('gameState').classList.add('hidden');
+  const days = new Map();
+  list.forEach(m => { const day = dayLabel(m.kickoff_at); days.set(day, [...(days.get(day) || []), m]); });
+  $('gameList').innerHTML = [...days].map(([day, items]) => `<div class="dayhead">${day} · ${items.length} kampe</div><div class="matches">${items.map(gameCard).join('')}</div>`).join('');
+}
+
+function renderStandings() {
+  const t = game.table;
+  if (!t) return;
+  $('tableScope').textContent = `${t.matches} afgjorte kampe i ligaens program (kampe mindst én deltager har budt på) · ${t.week_matches} i ${weekText(t.week).split(' · ')[0].toLowerCase()}. 1 point for rigtigt 1/X/2, +2 for præcist resultat; manglende bud giver 0.`;
+  $('standings').innerHTML = t.rows.length ? `<tr><th>#</th><th class="l">Spiller</th><th>Ugen</th><th>Point i alt</th><th>Kampe med bud</th><th>Rigtigt 1/X/2</th><th>Præcise resultater</th></tr>` + t.rows.map(r => `<tr class="${r.is_bot ? 'bot' : r.player === game.user ? 'me' : ''}"><td>${r.rank}</td><td class="l">${r.is_bot ? '🤖 ' : ''}${esc(r.player)}${r.player === game.user ? ' (dig)' : ''}</td><td>${r.week_points}</td><td><b>${r.total_points}</b></td><td>${r.predicted}</td><td>${pct(r.hit_rate, 0)}</td><td>${r.exact}</td></tr>`).join('') : '<tr><td>Ingen spillere endnu.</td></tr>';
+  const league = game.leagues.find(l => l.code === t.code);
+  $('inviteNote').innerHTML = league ? `Invitationskode: <b>${esc(league.code)}</b> · ${league.members} ${league.members === 1 ? 'deltager' : 'deltagere'} – del koden, så andre kan deltage.` : 'Alle spillere er med her. Opret en privat liga for at dyste mod dine venner.';
+  renderGameMetrics();
+}
+
+function renderLeagueSelect(selected) {
+  $('tableLeague').innerHTML = `<option value="alle">Alle spillere</option>` + game.leagues.map(l => `<option value="${esc(l.code)}">${esc(l.name)}</option>`).join('');
+  $('tableLeague').value = selected && [...$('tableLeague').options].some(o => o.value === selected) ? selected : 'alle';
+}
+
+async function loadRound(week) {
+  try {
+    game.round = await api(`/api/game/round${week ? `?week=${encodeURIComponent(week)}` : ''}`);
+    game.week = game.round.week;
+    renderRound();
+  } catch (error) {
+    $('gameList').innerHTML = '';
+    $('gameState').innerHTML = `<div class="notice error">Kunne ikke hente ugens kampe: ${esc(error.message)}</div>`;
+    $('gameState').classList.remove('hidden');
+  }
+}
+
+async function loadTable() {
+  try {
+    game.table = await api(`/api/game/table?league=${encodeURIComponent($('tableLeague').value || 'alle')}&week=${encodeURIComponent(game.week || '')}`);
+    renderStandings();
+  } catch (error) {
+    $('standings').innerHTML = `<tr><td><span class="neg">Kunne ikke hente stillingen: ${esc(error.message)}</span></td></tr>`;
+  }
+}
+
+async function loadGame() {
+  try {
+    const me = await api('/api/game/me');
+    game.user = me.user;
+    game.leagues = me.leagues || [];
+  } catch (error) {
+    $('authMessage').innerHTML = `<div class="notice error">Kunne ikke kontakte spillet: ${esc(error.message)}</div>`;
+    game.user = null;
+  }
+  $('gameAuth').classList.toggle('hidden', !!game.user);
+  $('gameArea').classList.toggle('hidden', !game.user);
+  if (!game.user) return;
+  $('gameUser').textContent = `Logget ind som ${game.user}`;
+  renderLeagueSelect($('tableLeague').value);
+  await loadRound(game.week);
+  await loadTable();
+}
+
+async function authenticate(event) {
+  event.preventDefault();
+  const action = event.submitter?.dataset.action || 'login';
+  try {
+    await postJson(`/api/game/${action}`, {username: $('authUser').value, password: $('authPass').value});
+    $('authPass').value = '';
+    $('authMessage').innerHTML = '';
+    await loadGame();
+  } catch (error) {
+    $('authMessage').innerHTML = `<div class="notice error">${esc(error.message)}</div>`;
+  }
+}
+
+function redrawCard(match, message='') {
+  const card = document.querySelector(`[data-card="${CSS.escape(matchKey(match))}"]`);
+  if (!card) return;
+  card.outerHTML = gameCard(match);
+  if (message) document.querySelector(`[data-card="${CSS.escape(matchKey(match))}"] .cardmsg`).innerHTML = `<div class="notice error">${esc(message)}</div>`;
+}
+
+function setEntry(match, entry, delay) {
+  // Show the new bid at once and save it after `delay` ms (later changes restart the wait).
+  const key = matchKey(match);
+  if (!match.my_entry) game.round.summary.entered += 1;
+  match.my_entry = entry;
+  match.saving = true;
+  redrawCard(match);
+  renderGameMetrics();
+  clearTimeout(game.timers.get(key));
+  game.timers.set(key, setTimeout(() => saveEntry(match), delay));
+}
+
+async function saveEntry(match) {
+  const key = matchKey(match), entry = match.my_entry;
+  game.timers.delete(key);
+  try {
+    const result = await postJson('/api/game/entries', {entries: [{
+      league: match.league, match_date: match.match_date, home_team: match.home_team, away_team: match.away_team,
+      pick: entry.pick, home_goals: entry.home_goals ?? null, away_goals: entry.away_goals ?? null,
+    }]}, 'PUT');
+    if (result.rejected.length) throw new Error(result.rejected[0].reason);
+    if (match.my_entry !== entry) return;  // changed again while saving; that save follows
+    match.saving = false;
+    redrawCard(match);
+  } catch (error) {
+    match.saving = false;
+    redrawCard(match, `Ikke gemt: ${error.message}`);
+  }
+}
+
+function onGameClick(event) {
+  const target = event.target.closest('.choice, .step, [data-clear]');
+  if (!target) return;
+  const key = target.dataset.key || target.dataset.clear;
+  const match = game.round.matches.find(m => matchKey(m) === key);
+  if (!match || match.locked) return;
+  const current = match.my_entry;
+  if (target.dataset.clear) {
+    setEntry(match, {pick: current.pick, home_goals: null, away_goals: null}, 0);
+  } else if (target.classList.contains('choice')) {
+    // A pick keeps the score only when the score still agrees with it.
+    const pick = target.dataset.pick, keep = hasScore(current) && outcomeOf(current.home_goals, current.away_goals) === pick;
+    setEntry(match, {pick, home_goals: keep ? current.home_goals : null, away_goals: keep ? current.away_goals : null}, 0);
+  } else {
+    // Without a score the steppers start from 0–0; the pick follows the score.
+    let [home, away] = hasScore(current) ? [current.home_goals, current.away_goals] : [0, 0];
+    const delta = Number(target.dataset.delta);
+    if (target.dataset.side === 'home') home = Math.max(0, Math.min(15, home + delta));
+    else away = Math.max(0, Math.min(15, away + delta));
+    setEntry(match, {pick: outcomeOf(home, away), home_goals: home, away_goals: away}, SAVE_DELAY_MS);
+  }
+}
+
+async function leagueAction(path, body, input) {
+  try {
+    const league = await postJson(path, body);
+    input.value = '';
+    $('leagueMessage').innerHTML = `<div class="notice">Du er med i <b>${esc(league.name)}</b> · invitationskode <b>${esc(league.code)}</b></div>`;
+    game.leagues = (await api('/api/game/me')).leagues || [];
+    renderLeagueSelect(league.code);
+    await loadTable();
+  } catch (error) {
+    $('leagueMessage').innerHTML = `<div class="notice error">${esc(error.message)}</div>`;
+  }
+}
+
+function initGame() {
+  $('authForm').addEventListener('submit', authenticate);
+  $('logoutButton').addEventListener('click', async () => {
+    await postJson('/api/game/logout', {}).catch(() => {});
+    game.user = null;
+    loadGame();
+  });
+  $('weekPrev').addEventListener('click', () => loadRound(game.round?.previous_week).then(loadTable));
+  $('weekNext').addEventListener('click', () => loadRound(game.round?.next_week).then(loadTable));
+  $('weekNow').addEventListener('click', () => loadRound(game.round?.current_week).then(loadTable));
+  $('gameLeagueFilter').addEventListener('change', renderRound);
+  $('tableLeague').addEventListener('change', loadTable);
+  $('createLeague').addEventListener('click', () => leagueAction('/api/game/leagues', {name: $('newLeagueName').value}, $('newLeagueName')));
+  $('joinLeague').addEventListener('click', () => leagueAction('/api/game/leagues/join', {code: $('joinCode').value}, $('joinCode')));
+  $('gameList').addEventListener('click', onGameClick);
 }
 
 /* ---------- Resultater ---------- */
@@ -675,6 +989,7 @@ async function init() {
     const versions = Object.entries(health.available_models).filter(([, ok]) => ok).map(([v]) => v).sort().reverse();
     $('version').innerHTML = versions.map(v => `<option value="${v}">Model ${v.toUpperCase()}${v === health.default_model ? ' (standard)' : ''}</option>`).join('');
     $('version').value = health.default_model;
+    state.hideModel = !!health.hide_model;
   } catch (_) {
     $('version').innerHTML = '<option value="v3">Model V3</option>';
   }
@@ -686,15 +1001,23 @@ async function init() {
   $('historyButton').addEventListener('click', refreshHistory);
   $('resultModel').addEventListener('change', renderResultTable);
   $('showSkipped').addEventListener('click', event => { event.preventDefault(); $('skippedBox').classList.toggle('hidden'); });
-  loadMatches();
+  initGame();
+  if (state.hideModel) {
+    // The prediction league is running: the model's pre-kickoff predictions stay hidden.
+    document.querySelector('nav button[data-tab=matches]').classList.add('hidden');
+    $('tab-matches').classList.add('hidden');
+    setApiStatus('Lokal API forbundet', 'ok');
+  } else {
+    loadMatches();
+  }
   loadPerformance();
   loadCoverage();
-  const tabs = ['matches', 'results', 'models', 'data'];
+  const tabs = ['matches', 'game', 'results', 'models', 'data'];
   let tab = location.hash.slice(1);
   if (!tabs.includes(tab)) {
     try { tab = localStorage.getItem('matchhub-tab'); } catch (_) {}
   }
-  showTab(tabs.includes(tab) ? tab : 'matches');
+  showTab(tabs.includes(tab) ? tab : state.hideModel ? 'game' : 'matches');
 }
 init();
 </script>

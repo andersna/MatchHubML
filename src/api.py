@@ -15,6 +15,7 @@ from functools import lru_cache
 import io
 import json
 import math
+import os
 from pathlib import Path
 import sqlite3
 import sys
@@ -23,8 +24,9 @@ import time
 from urllib.parse import quote
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Cookie, FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
 from .upcoming_match_features import OUTPUT_COLUMNS, build_upcoming_match_features_partial, history_team_name
 from .predict_upcoming_match import (
@@ -36,9 +38,11 @@ from .predict_upcoming_match import (
     ODDS_PREFERENCE_SQL,
     odds_probabilities,
 )
-from . import prediction_log
+from . import game, prediction_log
 from .backfill_prediction_log import backfill as backfill_predictions
 from .update_historical_data import update_historical_data
+from .build_elo_features_asof_day_v1 import replay_form_ratings
+from .collect_understat_xg import update_understat_matches
 from .sync_football_data import COMPETITIONS, SyncConfig, SyncError, run_sync
 from .sync_football_data import print_report as print_sync_report
 
@@ -58,6 +62,17 @@ SYNC_DAYS_AHEAD = 30
 # history on a sync when the last download is older than this.
 HISTORY_REFRESH_INTERVAL = timedelta(hours=12)
 OUTCOMES = ("H", "D", "A")
+# Set MATCHHUB_HIDE_MODEL=1 when others play the prediction league: /api/matches
+# is refused and the frontend hides the Kampe tab, so nobody can copy the model
+# before kickoff. Predictions are still made and logged (the bot's entries).
+HIDE_MODEL_ENV = "MATCHHUB_HIDE_MODEL"
+SESSION_COOKIE = "matchhub_session"
+BOT_REFRESH_INTERVAL = timedelta(minutes=15)
+
+
+def hide_model() -> bool:
+    return os.environ.get(HIDE_MODEL_ENV, "").strip().lower() in {"1", "true", "yes"}
+
 
 _SRC_DIR = str(Path(__file__).resolve().parent)
 if _SRC_DIR not in sys.path:
@@ -391,6 +406,7 @@ def sync_data():
         except (SyncError, ValueError, OSError, sqlite3.Error) as exc:
             raise HTTPException(status_code=502, detail=_plain_failure(str(exc))) from exc
         if history.attempted and not history.error:
+            _refresh_understat_xg()
             # A fresh season file can give played matches odds for the Resultater tab.
             try:
                 backfill_predictions({v: get_bundle(v) for v in available_versions()}, DATABASE_PATH)
@@ -425,19 +441,33 @@ LAST_HISTORY_REFRESH_PATH = DATA_DIR / "last_history_refresh.json"
 
 
 @lru_cache(maxsize=2)
-def _fixtures_results(mtime_ns: int) -> dict[tuple[str, str, str, str], dict]:
-    """(league, date, home, away) -> result from fixtures.csv, keyed by football-data.co.uk names."""
+def _fixtures_results(mtime_ns: int) -> dict[tuple, dict]:
+    """match_identity -> result from fixtures.csv, with football-data.co.uk team names."""
     fixtures = pd.read_csv(
         DATA_DIR / "fixtures.csv", low_memory=False,
         usecols=["date", "league", "home_team", "away_team", "home_goals", "away_goals", "result"],
     ).dropna(subset=["result", "home_goals", "away_goals"])
     fixtures = fixtures[fixtures["result"].isin(OUTCOMES)]
     return {
-        (row.league, str(row.date)[:10], row.home_team, row.away_team): {
+        prediction_log.match_identity(row.league, str(row.date)[:10], row.home_team, row.away_team): {
+            "match_date": str(row.date)[:10],
             "home_score": int(row.home_goals), "away_score": int(row.away_goals), "result": row.result,
         }
         for row in fixtures.itertuples(index=False)
     }
+
+
+@lru_cache(maxsize=1)
+def _form_ratings(mtime_ns: int) -> dict[tuple[str, str], float]:
+    return replay_form_ratings(pd.read_csv(DATA_DIR / "fixtures.csv", low_memory=False))
+
+
+def form_rating(league: str, team: str) -> float | None:
+    """The app's form rating for a team (display only; not a model input)."""
+    path = DATA_DIR / "fixtures.csv"
+    if not path.is_file():
+        return None
+    return _form_ratings(path.stat().st_mtime_ns).get((league, history_team_name(league, team)))
 
 
 def history_results(keys: list[tuple[str, str, str, str]]) -> dict[tuple, dict]:
@@ -448,7 +478,8 @@ def history_results(keys: list[tuple[str, str, str, str]]) -> dict[tuple, dict]:
     known = _fixtures_results(path.stat().st_mtime_ns)
     found = {}
     for league, match_date, home, away in keys:
-        result = known.get((league, match_date, history_team_name(league, home), history_team_name(league, away)))
+        result = known.get(prediction_log.match_identity(
+            league, match_date, history_team_name(league, home), history_team_name(league, away)))
         if result:
             found[(league, match_date, home, away)] = result
     return found
@@ -501,6 +532,20 @@ def _history_text(history) -> str:
     )
 
 
+def _refresh_understat_xg() -> str | None:
+    """Refresh Understat xG (v3's xG features) after a history update.
+
+    Finished seasons are cached and the current season is re-downloaded at most
+    daily. A failure only logs a warning: predictions then use the existing xG.
+    """
+    try:
+        update_understat_matches()
+        return None
+    except Exception as exc:  # network/parse problems must never break a sync
+        print(f"[ADVARSEL] Understat-xG kunne ikke opdateres: {exc}", flush=True)
+        return str(exc)
+
+
 @app.post("/api/history/refresh")
 def refresh_history():
     """Download the newest football-data.co.uk season file now and use it.
@@ -516,7 +561,9 @@ def refresh_history():
     try:
         history = update_historical_data(force=True)
         backfilled = {"logged": 0, "matches_added": 0, "from_workbook": 0, "from_5dollar": 0, "no_odds": 0, "skipped": []}
+        xg_error = None
         if not history.error:
+            xg_error = _refresh_understat_xg()
             try:
                 bundles = {version: get_bundle(version) for version in available_versions()}
                 backfilled = backfill_predictions(bundles, DATABASE_PATH)
@@ -536,6 +583,7 @@ def refresh_history():
         "missing_odds": history.missing_odds,
         "error": history.error,
         "backfill": backfilled,
+        "xg_error": xg_error,
         "workbook": workbook_summary(),
     }
     try:
@@ -571,6 +619,7 @@ def health():
         },
         "default_model": DEFAULT_MODEL_VERSION,
         "external_sync": False,
+        "hide_model": hide_model(),
     }
 
 
@@ -620,6 +669,12 @@ def list_predictions(
     league: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ):
+    if hide_model():
+        raise HTTPException(status_code=403, detail="Modellens forudsigelser er skjult, mens spillet kører.")
+    return predict_upcoming(model_version, league, limit)
+
+
+def predict_upcoming(model_version: str = DEFAULT_MODEL_VERSION, league: str | None = None, limit: int = 50):
     """Predict future cached fixtures with stored Bet365 odds (lookup price, else opening).
 
     Every available model predicts every match (cheap once features exist);
@@ -697,6 +752,7 @@ def list_predictions(
                         "odds_observed_at_utc": fixture["observed_at_utc"],
                         "odds_market": fixture["market"],
                         "odds": fixture["odds_probabilities"], "probs": probs,
+                        "expected_goals": (sports["home_expected_goals"], sports["away_expected_goals"]),
                     })
             except (ValueError, FileNotFoundError, RuntimeError, KeyError) as exc:
                 skipped.append(_skip(fixture, str(exc)))
@@ -727,6 +783,10 @@ def list_predictions(
                     for version, info in all_models.items()
                 },
                 "features": sports,
+                "form_rating": {
+                    "home": form_rating(fixture["league"], fixture["home_team"]),
+                    "away": form_rating(fixture["league"], fixture["away_team"]),
+                },
             })
 
     try:
@@ -897,3 +957,167 @@ def status():
             info["prediction_log"]["rows"] = connection.execute("SELECT count(*) FROM predictions").fetchone()[0]
     info["models"] = available_versions()
     return info
+
+
+# ---------- Prediction league (src/game.py) ----------
+
+class Credentials(BaseModel):
+    username: str
+    password: str
+
+
+class EntryIn(BaseModel):
+    league: str
+    match_date: str
+    home_team: str
+    away_team: str
+    pick: str
+    home_goals: int | None = None
+    away_goals: int | None = None
+
+
+class EntriesIn(BaseModel):
+    entries: list[EntryIn]
+
+
+class LeagueIn(BaseModel):
+    name: str
+
+
+class JoinIn(BaseModel):
+    code: str
+
+
+_bot_lock = threading.Lock()
+_bot_refreshed_at: datetime | None = None
+
+
+def _refresh_bot_entries() -> None:
+    """Predict and log upcoming matches (the bot's entries) at most every 15 minutes, in the background."""
+    global _bot_refreshed_at
+    now = datetime.now(timezone.utc)
+    if (_bot_refreshed_at and now - _bot_refreshed_at < BOT_REFRESH_INTERVAL) or not _bot_lock.acquire(blocking=False):
+        return
+    _bot_refreshed_at = now
+
+    def run() -> None:
+        try:
+            predict_upcoming(game.BOT_MODEL_VERSION, None, 200)
+        except Exception as exc:  # the game must work even when predictions fail
+            print(f"[ADVARSEL] Botten kunne ikke forudsige: {exc}", flush=True)
+        finally:
+            _bot_lock.release()
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def game_results(keys: list[tuple[str, str, str, str]]) -> dict[tuple, dict]:
+    """Finished results from the match cache, with fixtures.csv as fallback; matched on
+    match_identity, so a key with a match's old date still finds its result."""
+    found = prediction_log._finished_results(DATABASE_PATH) if DATABASE_PATH.is_file() else {}
+    identity = prediction_log.match_identity
+    wanted = {key: found[identity(*key)] for key in keys if identity(*key) in found}
+    missing = [key for key in keys if key not in wanted]
+    if missing:
+        wanted.update(history_results(missing))
+    return wanted
+
+
+def _player(session: str | None) -> dict:
+    user = game.user_for_token(session)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Log ind for at spille.")
+    return user
+
+
+def _set_session(response: Response, token: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE, token, max_age=game.SESSION_DAYS * 86400, httponly=True, samesite="lax",
+    )
+
+
+def _game_call(function, *args, **kwargs):
+    try:
+        return function(*args, **kwargs)
+    except game.GameError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (sqlite3.Error, FileNotFoundError) as exc:
+        raise HTTPException(status_code=500, detail=f"Spillets data kunne ikke læses: {exc}") from exc
+
+
+@app.post("/api/game/register")
+def game_register(credentials: Credentials, response: Response):
+    _set_session(response, _game_call(game.register, credentials.username, credentials.password))
+    return {"ok": True}
+
+
+@app.post("/api/game/login")
+def game_login(credentials: Credentials, response: Response):
+    _set_session(response, _game_call(game.login, credentials.username, credentials.password))
+    return {"ok": True}
+
+
+@app.post("/api/game/logout")
+def game_logout(response: Response, session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
+    if session:
+        game.logout(session)
+    response.delete_cookie(SESSION_COOKIE)
+    return {"ok": True}
+
+
+@app.get("/api/game/me")
+def game_me(session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
+    user = game.user_for_token(session)
+    if user is None:
+        return {"user": None}
+    return {"user": user["username"], "leagues": game.user_leagues(user["user_id"])}
+
+
+@app.get("/api/game/round")
+def game_round(
+    week: str | None = Query(default=None),
+    session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+):
+    """The week's matches with the player's picks; the bot's pick only after kickoff."""
+    user = _player(session)
+    _refresh_bot_entries()
+    week = week or game.iso_week(datetime.now(timezone.utc))
+    return _game_call(
+        game.round_view, user["user_id"], week,
+        cache_path=DATABASE_PATH, log_path=prediction_log.LOG_PATH, results=game_results,
+    )
+
+
+@app.put("/api/game/entries")
+def game_entries(payload: EntriesIn, session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
+    user = _player(session)
+    return _game_call(
+        game.save_entries, user["user_id"], [entry.model_dump() for entry in payload.entries],
+        cache_path=DATABASE_PATH,
+    )
+
+
+@app.post("/api/game/leagues")
+def game_create_league(payload: LeagueIn, session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
+    return _game_call(game.create_league, _player(session)["user_id"], payload.name)
+
+
+@app.post("/api/game/leagues/join")
+def game_join_league(payload: JoinIn, session: str | None = Cookie(default=None, alias=SESSION_COOKIE)):
+    return _game_call(game.join_league, _player(session)["user_id"], payload.code)
+
+
+@app.get("/api/game/table")
+def game_table(
+    league: str = Query(default=game.GLOBAL_LEAGUE),
+    week: str | None = Query(default=None),
+    session: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+):
+    """Standings with MatchHub V3 as a player; private leagues only for members."""
+    user = _player(session)
+    if league != game.GLOBAL_LEAGUE and league not in {l["code"] for l in game.user_leagues(user["user_id"])}:
+        raise HTTPException(status_code=403, detail="Du er ikke med i den liga.")
+    return _game_call(
+        game.league_table, league, cache_path=DATABASE_PATH, log_path=prediction_log.LOG_PATH,
+        results=game_results, week=week or game.iso_week(datetime.now(timezone.utc)),
+    )

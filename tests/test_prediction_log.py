@@ -83,14 +83,75 @@ class PredictionLogTests(unittest.TestCase):
                 VALUES ('2026-10-20T10:00:00Z', 'live', 'v3', 'a', 'Premier League', '2026-10-25', NULL,
                 'Home FC', 'Away FC', '2026-10-19T08:00:00Z', 0.5, 0.3, 0.2, 0.6, 0.25, 0.15)"""
             )
-        self.assertEqual(prediction_log.logged_matches(path=self.log), {("v3", "Premier League", "2026-10-25", "Home FC", "Away FC")})
+        self.assertEqual(prediction_log.logged_matches(path=self.log), {("v3", "Premier League", 2026, "Home FC", "Away FC")})
         with closing(sqlite3.connect(self.log)) as connection:
             self.assertEqual(connection.execute("SELECT odds_market FROM predictions").fetchall(), [("1X2:opening",)])
 
-    def test_logged_matches_are_plain_tuples_for_membership_checks(self):
+    def test_old_log_without_expected_goals_gets_the_columns(self):
+        old_schema = prediction_log.SCHEMA.replace("    home_expected_goals REAL,\n    away_expected_goals REAL,\n", "")
+        with closing(sqlite3.connect(self.log)) as connection, connection:
+            connection.executescript(old_schema)
+        record = {**_record("v3", (0.6, 0.25, 0.15)), "expected_goals": (1.8, 1.1)}
+        self.assertEqual(prediction_log.log_predictions([record], path=self.log), 1)
+        with closing(sqlite3.connect(self.log)) as connection:
+            self.assertEqual(connection.execute("SELECT home_expected_goals, away_expected_goals FROM predictions").fetchall(),
+                             [(1.8, 1.1)])
+
+    def test_repeat_fills_in_missing_expected_goals_without_counting_as_new(self):
+        prediction_log.log_predictions([_record("v3", (0.6, 0.25, 0.15))], path=self.log)
+        again = prediction_log.log_predictions([{**_record("v3", (0.6, 0.25, 0.15)), "expected_goals": (1.8, 1.1)}],
+                                               path=self.log)
+        self.assertEqual(again, 0)
+        with closing(sqlite3.connect(self.log)) as connection:
+            self.assertEqual(connection.execute("SELECT home_expected_goals, away_expected_goals FROM predictions").fetchall(),
+                             [(1.8, 1.1)])
+
+    def test_logged_matches_are_keyed_by_season_not_date(self):
         prediction_log.log_predictions([_record("v3", (0.6, 0.25, 0.15))], path=self.log)
         logged = prediction_log.logged_matches(path=self.log)
-        self.assertIn(("v3", "Premier League", "2026-10-25", "Home FC", "Away FC"), logged)
+        moved = prediction_log.match_identity("Premier League", "2026-11-04", "Home FC", "Away FC")
+        self.assertIn(("v3", *moved), logged)
+
+    def test_season_starts_in_july(self):
+        self.assertEqual(prediction_log.season_start("2026-07-01"), 2026)
+        self.assertEqual(prediction_log.season_start("2027-05-20"), 2026)
+
+    def _rescheduled_cache(self):
+        """The match was logged for 25 Oct but moved to 24 Oct 18:00 and played then."""
+        cache = Path(self.temp.name) / "moved.sqlite"
+        with closing(sqlite3.connect(cache)) as connection, connection:
+            connection.execute(
+                """CREATE TABLE matches (data_source TEXT, league TEXT, match_date TEXT, kickoff_at TEXT,
+                home_team TEXT, away_team TEXT, match_status TEXT, home_score INT, away_score INT, result TEXT)"""
+            )
+            connection.execute(
+                "INSERT INTO matches VALUES ('football-data.org', 'Premier League', '2026-10-24', "
+                "'2026-10-24T18:00:00Z', 'Home FC', 'Away FC', 'FINISHED', 2, 1, 'H')"
+            )
+        return cache
+
+    def test_rescheduled_match_keeps_its_prediction_and_shows_the_new_date(self):
+        prediction_log.log_predictions([_record("v3", (0.6, 0.25, 0.15))], path=self.log)  # logged for 25 Oct
+        report = prediction_log.evaluate(self._rescheduled_cache(), path=self.log)
+        self.assertEqual(report["pending"], 0)
+        self.assertEqual(len(report["matches"]), 1)
+        self.assertEqual(report["matches"][0]["match_date"], "2026-10-24")
+        self.assertEqual(report["matches"][0]["result"], "H")
+
+    def test_live_prediction_beats_a_later_reconstruction_of_the_same_match(self):
+        prediction_log.log_predictions([
+            _record("v3", (0.6, 0.25, 0.15)),  # live, logged for 25 Oct
+            {**_record("v3", (0.2, 0.3, 0.5), source="backfill", logged="2026-10-26T10:00:00Z"), "match_date": "2026-10-24"},
+        ], path=self.log)
+        match = prediction_log.evaluate(self._rescheduled_cache(), path=self.log)["matches"][0]
+        self.assertEqual(match["v3"]["source"], "live")
+        self.assertEqual(match["v3"]["probs"], [0.6, 0.25, 0.15])
+
+    def test_live_prediction_after_the_actual_kickoff_is_ignored(self):
+        # Logged while the cache still said 25 Oct, but the match had kicked off on 24 Oct.
+        prediction_log.log_predictions([_record("v3", (0.9, 0.05, 0.05), logged="2026-10-24T19:00:00Z")], path=self.log)
+        report = prediction_log.evaluate(self._rescheduled_cache(), path=self.log)
+        self.assertEqual(report["matches"], [])
 
     def test_fallback_supplies_results_the_cache_lacks(self):
         prediction_log.log_predictions([_record("v3", (0.2, 0.3, 0.5), home="Old FC")], path=self.log)

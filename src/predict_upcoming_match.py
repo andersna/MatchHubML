@@ -39,13 +39,15 @@ try:
     from .predict_match import CLASS_ORDER, ModelBundle, load_model_bundle, predict_match
     from .train_final_nn_odds_asof_day_v1 import MODEL_FEATURES, NN_FEATURES, ODDS_FEATURES
     from .update_historical_data import UpdateReport, ensure_historical_data_current, print_report
-    from .upcoming_match_features import build_upcoming_match_features
+    from .upcoming_match_features import build_upcoming_match_features, history_team_name
+    from .xg_features import XG_FEATURES, load_xg_history
 except ImportError:  # pragma: no cover - direct script execution
     from data_store import DEFAULT_DATABASE_PATH, DataStore
     from predict_match import CLASS_ORDER, ModelBundle, load_model_bundle, predict_match
     from train_final_nn_odds_asof_day_v1 import MODEL_FEATURES, NN_FEATURES, ODDS_FEATURES
     from update_historical_data import UpdateReport, ensure_historical_data_current, print_report
-    from upcoming_match_features import build_upcoming_match_features
+    from upcoming_match_features import build_upcoming_match_features, history_team_name
+    from xg_features import XG_FEATURES, load_xg_history
 
 
 ODDS_TOLERANCE = 1e-8
@@ -230,7 +232,12 @@ def assemble_model_input(
     fixtures: pd.DataFrame | str | Path | None = None,
     sports_features: dict[str, float] | None = None,
 ) -> tuple[dict[str, Any], pd.Timestamp]:
-    """Build and validate the exact 30-column model row without fitting preprocessing."""
+    """Build and validate the model row without fitting preprocessing.
+
+    The row holds the 30 v1/v2 columns followed by the 10 xG columns; each
+    model reads only the columns it was trained on. xG is NaN when a team has
+    no Understat history yet, and the saved median imputer fills it.
+    """
     for label, value in (("liga", league), ("hjemmehold", home_team), ("udehold", away_team)):
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{label.capitalize()} skal angives som en ikke-tom tekstværdi.")
@@ -260,8 +267,11 @@ def assemble_model_input(
 
     row = {name: float(sports.at[0, name]) for name in NN_FEATURES}
     row.update(dict(zip(ODDS_FEATURES, odds)))
-    if tuple(row) != tuple(MODEL_FEATURES) or len(row) != 30:
-        raise RuntimeError("Samlet input afviger fra modellens 30 features eller rækkefølge.")
+    row.update(load_xg_history().match_features(
+        league, history_team_name(league, home_team), history_team_name(league, away_team), parsed_date,
+    ))
+    if tuple(row) != tuple(MODEL_FEATURES) + tuple(XG_FEATURES) or len(row) != 40:
+        raise RuntimeError("Samlet input afviger fra modellens 40 features eller rækkefølge.")
     return row, parsed_date
 
 
@@ -402,14 +412,19 @@ class TestUpcomingPredictionAssembly(unittest.TestCase):
         from unittest.mock import patch
 
         fake_sports = pd.DataFrame([{name: float(index) for index, name in enumerate(NN_FEATURES)}])
-        with patch(__name__ + ".build_upcoming_match_features", return_value=fake_sports):
+        fake_xg = {name: 1.0 for name in XG_FEATURES}
+        with patch(__name__ + ".build_upcoming_match_features", return_value=fake_sports), \
+                patch(__name__ + ".history_team_name", side_effect=lambda league, name: name), \
+                patch(__name__ + ".load_xg_history") as xg_history:
+            xg_history.return_value.match_features.return_value = fake_xg
             row, _ = assemble_model_input(
                 "League", "Home", "Away", date.today(), 0.5, 0.25, 0.25,
                 fixtures=pd.DataFrame(),
             )
-        self.assertEqual(tuple(row), tuple(MODEL_FEATURES))
-        self.assertEqual(len(row), 30)
+        self.assertEqual(tuple(row), tuple(MODEL_FEATURES) + tuple(XG_FEATURES))
+        self.assertEqual(len(row), 40)
         self.assertEqual([row[name] for name in ODDS_FEATURES], [0.5, 0.25, 0.25])
+        self.assertEqual([row[name] for name in XG_FEATURES], [1.0] * len(XG_FEATURES))
 
     def test_rejects_invalid_odds_before_feature_lookup(self) -> None:
         with self.assertRaisesRegex(ValueError, "summere til 1"):

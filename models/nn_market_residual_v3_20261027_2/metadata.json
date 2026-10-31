@@ -1,0 +1,149 @@
+{
+  "artifact_name": "nn_market_residual_v3_20261027_2",
+  "created_utc": "2026-10-27T19:14:42.854962+00:00",
+  "model_class": "MarketResidualEnsemble",
+  "member_count": 5,
+  "architecture": {
+    "member": "logits = log(odds probabilities) + correction(x)",
+    "correction": [
+      40,
+      32,
+      "ReLU",
+      "Dropout(0.15)",
+      16,
+      "ReLU",
+      3
+    ],
+    "correction_last_layer_init": "zeros",
+    "ensemble": "mean of member softmax probabilities"
+  },
+  "feature_columns_in_order": [
+    "home_avg_goals_for",
+    "home_avg_goals_against",
+    "home_avg_points",
+    "away_avg_goals_for",
+    "away_avg_goals_against",
+    "away_avg_points",
+    "home_last5_goals_for",
+    "home_last5_goals_against",
+    "home_last5_points",
+    "away_last5_goals_for",
+    "away_last5_goals_against",
+    "away_last5_points",
+    "home_attack_strength",
+    "away_attack_strength",
+    "home_defense_strength",
+    "away_defense_strength",
+    "home_expected_goals",
+    "away_expected_goals",
+    "home_elo_k16",
+    "away_elo_k16",
+    "home_elo_k32",
+    "away_elo_k32",
+    "home_elo_k48",
+    "away_elo_k48",
+    "elo_difference_k16",
+    "elo_difference_k32",
+    "elo_difference_k48",
+    "odds_prob_home",
+    "odds_prob_draw",
+    "odds_prob_away",
+    "home_xg_for_last5",
+    "home_xg_against_last5",
+    "home_xg_for_last10",
+    "home_xg_against_last10",
+    "away_xg_for_last5",
+    "away_xg_against_last5",
+    "away_xg_for_last10",
+    "away_xg_against_last10",
+    "xg_balance_diff_last5",
+    "xg_balance_diff_last10"
+  ],
+  "feature_count": 40,
+  "xg_source": "data/understat_matches.csv (src/collect_understat_xg.py); NaN -> saved median",
+  "xg_training_coverage": 0.49873615515418906,
+  "market_columns": [
+    "odds_prob_home",
+    "odds_prob_draw",
+    "odds_prob_away"
+  ],
+  "class_to_index": {
+    "H": 0,
+    "D": 1,
+    "A": 2
+  },
+  "index_to_class": [
+    "H",
+    "D",
+    "A"
+  ],
+  "seeds": [
+    42,
+    123,
+    2026,
+    3407,
+    9876
+  ],
+  "optimizer": {
+    "name": "AdamW",
+    "learning_rate": 0.001,
+    "weight_decay": 0.01,
+    "batch_size": 256,
+    "epochs_by_seed": {
+      "42": 4,
+      "123": 4,
+      "2026": 4,
+      "3407": 4,
+      "9876": 4
+    },
+    "training_loss": "unweighted CrossEntropyLoss (no class weights)"
+  },
+  "epoch_selection": {
+    "method": "per seed: chronological 85/15 unique-date holdout; best epoch by unweighted validation CrossEntropyLoss, epoch 0 = market; patience 8; max 100; refit all rows",
+    "validation_cross_entropy_by_seed": {
+      "42": 0.9651095867156982,
+      "123": 0.9649257659912109,
+      "2026": 0.9648544192314148,
+      "3407": 0.9646263718605042,
+      "9876": 0.9652318954467773
+    },
+    "subtrain_rows": 37565,
+    "validation_rows": 5953,
+    "subtrain_start": "2002-08-02",
+    "subtrain_end": "2023-04-25",
+    "validation_start": "2023-04-26",
+    "validation_end": "2026-10-26",
+    "market_only_validation_cross_entropy": 0.96635502576828
+  },
+  "backtest": {
+    "source": "retrain_v3.py holdout: trained before 2025-26, tested on 2025-26",
+    "season": "2025-26",
+    "matches": 1748,
+    "accuracy": 0.5291762013729977,
+    "log_loss": 0.9778556127824443,
+    "odds_only_accuracy": 0.532608695652174,
+    "odds_only_log_loss": 0.9790406161629639,
+    "delta_log_loss_vs_odds": -0.0011850033805197392,
+    "delta_log_loss_vs_odds_se": 0.0010253745557493987
+  },
+  "training_data": {
+    "path": "data\\odds_model_dataset_retrain_20261027_2.csv",
+    "sha256": "f9d766b1e4b53255f8ab156c50577eaa570351aaf65cbffd75fec07c32ff90b6",
+    "rows": 43518,
+    "start_date": "2002-08-02",
+    "end_date": "2026-10-26",
+    "unique_odds_match_keys": 43518
+  },
+  "odds_timestamp_caveat": "Historical odds have no documented snapshot timestamps; availability before kickoff is unverified.",
+  "runtime": {
+    "python": "3.12.10",
+    "pytorch": "2.14.1+cu132",
+    "numpy": "2.5.4",
+    "pandas": "3.0.6",
+    "device_used_for_training": "cuda"
+  },
+  "files": {
+    "weights": "model_state_dict.pt",
+    "preprocessing": "preprocessing.json"
+  }
+}

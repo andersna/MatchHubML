@@ -37,10 +37,12 @@ from train_final_nn_odds_asof_day_v1 import (
 from experiment_nn_odds_asof_day_v1 import INDEX_TO_LABEL
 from nn_preprocessing import MedianStandardPreprocessor
 from train_final_nn_market_residual_v3 import MODEL_CLASS as RESIDUAL_MODEL_CLASS
-from train_final_nn_market_residual_v3 import MarketResidualEnsemble
+from train_final_nn_market_residual_v3 import MarketResidualEnsemble, V3_FEATURES
 
 
 CLASS_ORDER = tuple(INDEX_TO_LABEL.tolist())
+# v1, v2 and v3 artifacts trained before xG use MODEL_FEATURES; v3 with xG uses V3_FEATURES.
+SUPPORTED_FEATURE_SETS = (tuple(MODEL_FEATURES), tuple(V3_FEATURES))
 
 
 @dataclass
@@ -67,9 +69,9 @@ def load_model_bundle(
 
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     feature_columns = tuple(metadata.get("feature_columns_in_order", ()))
-    if feature_columns != tuple(MODEL_FEATURES):
+    if feature_columns not in SUPPORTED_FEATURE_SETS:
         raise ValueError("Metadataens featureliste/-rækkefølge afviger fra træningskoden.")
-    if metadata.get("feature_count") != len(MODEL_FEATURES):
+    if metadata.get("feature_count") != len(feature_columns):
         raise ValueError("Metadataens featureantal stemmer ikke med træningskoden.")
     if metadata.get("class_to_index") != LABEL_TO_INDEX:
         raise ValueError("Metadataens H/D/A-mapping afviger fra træningskoden.")
@@ -103,7 +105,9 @@ def load_model_bundle(
     )
 
 
-def _as_one_row(match: Mapping[str, Any] | pd.Series | pd.DataFrame) -> pd.DataFrame:
+def _as_one_row(
+    match: Mapping[str, Any] | pd.Series | pd.DataFrame, feature_columns: tuple[str, ...]
+) -> pd.DataFrame:
     if isinstance(match, pd.DataFrame):
         if len(match) != 1:
             raise ValueError("predict_match forventer præcis én kamprække.")
@@ -115,10 +119,10 @@ def _as_one_row(match: Mapping[str, Any] | pd.Series | pd.DataFrame) -> pd.DataF
     else:
         raise TypeError("Kampen skal være en mapping, pandas Series eller én-rækkes DataFrame.")
 
-    missing = [name for name in MODEL_FEATURES if name not in row.columns]
+    missing = [name for name in feature_columns if name not in row.columns]
     if missing:
         raise ValueError(f"Kampen mangler modelfeatures: {missing}")
-    return row.loc[:, MODEL_FEATURES].reset_index(drop=True)
+    return row.loc[:, list(feature_columns)].reset_index(drop=True)
 
 
 def predict_match(
@@ -131,7 +135,7 @@ def predict_match(
     Odds probabilities must be present, numeric, in (0, 1], and sum to 1.
     """
     bundle = bundle or load_model_bundle()
-    row = _as_one_row(match)
+    row = _as_one_row(match, bundle.feature_columns)
     numeric_row = pd.DataFrame(index=[0])
     for column in bundle.feature_columns:
         raw_value = row.at[0, column]

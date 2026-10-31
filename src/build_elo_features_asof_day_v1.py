@@ -7,7 +7,7 @@ uses a two-pass daily calculation and is retained here.
 """
 
 from collections import defaultdict
-from math import exp
+from math import exp, log2
 from pathlib import Path
 
 import numpy as np
@@ -47,6 +47,28 @@ ATTACK_DEFENSE_COLUMNS = [
     "away_expected_goals",
 ]
 FEATURE_COLUMNS = ELO_COLUMNS + ATTACK_DEFENSE_COLUMNS
+
+# Experimental margin-of-victory Elo, kept apart from ELO_COLUMNS so the v1-v3
+# feature sets are unchanged. "mov" scales K by goal difference; "movr" also
+# pulls every rating a third of the way back to INITIAL_ELO at each new season.
+MOV_AUTOCORRELATION = 2.2
+MOV_SEASON_REGRESSION = 1 / 3
+MOV_VARIANTS = {"mov": 0.0, "movr": MOV_SEASON_REGRESSION}
+# Display-only "form rating" for the app; not a model feature. Margin-of-
+# victory Elo with a high K and half the distance to INITIAL_ELO removed every
+# summer, so this season's results dominate while last season still counts.
+FORM_RATING_K = 48
+FORM_RATING_REGRESSION = 0.5
+MOV_ELO_COLUMNS = [
+    name
+    for variant in MOV_VARIANTS
+    for k in K_FACTORS
+    for name in (
+        f"home_elo_{variant}_k{k}",
+        f"away_elo_{variant}_k{k}",
+        f"elo_{variant}_difference_k{k}",
+    )
+]
 
 
 def expected_score(rating: float, opponent_rating: float) -> float:
@@ -175,6 +197,109 @@ def calculate_elo_all_k_asof_day(data: pd.DataFrame) -> pd.DataFrame:
         _day_bounds(data["date"].dt.normalize()), feature_arrays,
     )
     return pd.DataFrame(feature_arrays, columns=ELO_COLUMNS)
+
+
+def margin_multiplier(goal_diff: int, winner_rating_diff: float) -> float:
+    """K multiplier from the goal margin (FiveThirtyEight-style).
+
+    ln-scaled so a one-goal win is 1.0, 2 goals 1.58, 3 goals 2.0. The
+    autocorrelation term shrinks the bonus when the favourite (by rating incl.
+    home advantage) wins big and grows it for upsets, so strong teams do not
+    inflate just by beating weak teams heavily. Draws return 1.0.
+    """
+    if goal_diff == 0:
+        return 1.0
+    return log2(abs(goal_diff) + 1) * MOV_AUTOCORRELATION / (
+        winner_rating_diff * 0.001 + MOV_AUTOCORRELATION
+    )
+
+
+def _replay_mov_elo(leagues, home_teams, away_teams, home_goals, away_goals, seasons,
+                    bounds, regression, prefix, feature_arrays=None,
+                    k_factors=K_FACTORS) -> dict[int, dict]:
+    """Margin-of-victory Elo for all K factors with the same daily semantics.
+
+    ``regression`` is the share of (rating - INITIAL_ELO) removed the first time
+    a team appears in a new season; the season label is known before kickoff.
+    """
+    ratings = {k: {} for k in k_factors}
+    last_season = {}
+
+    for start, end in bounds:
+        if regression:
+            for i in range(start, end):
+                season = seasons[i]
+                for team_key in ((leagues[i], home_teams[i]), (leagues[i], away_teams[i])):
+                    previous = last_season.get(team_key)
+                    if previous is not None and previous != season:
+                        for current_ratings in ratings.values():
+                            rating = current_ratings[team_key]
+                            current_ratings[team_key] = rating - regression * (rating - INITIAL_ELO)
+                    last_season[team_key] = season
+
+        daily_deltas = {k: {} for k in k_factors}
+        for i in range(start, end):
+            league = leagues[i]
+            home_key = (league, home_teams[i])
+            away_key = (league, away_teams[i])
+            goal_diff = home_goals[i] - away_goals[i]
+            home_actual = actual_score(home_goals[i], away_goals[i])
+
+            for k_factor in k_factors:
+                current_ratings = ratings[k_factor]
+                home_rating = current_ratings.get(home_key, INITIAL_ELO)
+                away_rating = current_ratings.get(away_key, INITIAL_ELO)
+                home_edge = home_rating + HOME_ADVANTAGE - away_rating
+                expected_home = expected_score(home_rating + HOME_ADVANTAGE, away_rating)
+
+                if feature_arrays is not None:
+                    feature_arrays[f"home_elo_{prefix}_k{k_factor}"][i] = home_rating
+                    feature_arrays[f"away_elo_{prefix}_k{k_factor}"][i] = away_rating
+                    feature_arrays[f"elo_{prefix}_difference_k{k_factor}"][i] = home_rating - away_rating
+
+                multiplier = margin_multiplier(goal_diff, home_edge if goal_diff > 0 else -home_edge)
+                delta = k_factor * multiplier * (home_actual - expected_home)
+                deltas = daily_deltas[k_factor]
+                deltas[home_key] = deltas.get(home_key, 0.0) + delta
+                deltas[away_key] = deltas.get(away_key, 0.0) - delta
+
+        for k_factor in k_factors:
+            current_ratings = ratings[k_factor]
+            for team_key, delta in daily_deltas[k_factor].items():
+                current_ratings[team_key] = current_ratings.get(team_key, INITIAL_ELO) + delta
+
+    return ratings
+
+
+def replay_form_ratings(fixtures: pd.DataFrame) -> dict[tuple[str, str], float]:
+    """(league, team) -> form rating after every fixture (display only)."""
+    df = _prepare_fixtures(fixtures)
+    ratings = _replay_mov_elo(
+        df["league"].tolist(), df["home_team"].tolist(), df["away_team"].tolist(),
+        df["home_goals"].tolist(), df["away_goals"].tolist(), df["season"].tolist(),
+        _day_bounds(df["date"].dt.normalize()), FORM_RATING_REGRESSION, "form",
+        k_factors=(FORM_RATING_K,),
+    )
+    return ratings[FORM_RATING_K]
+
+
+def build_mov_elo_features(fixtures: pd.DataFrame) -> pd.DataFrame:
+    """Return the fixtures (date-sorted) with MOV_ELO_COLUMNS added."""
+    df = _prepare_fixtures(fixtures)
+    columns = (
+        df["league"].tolist(), df["home_team"].tolist(), df["away_team"].tolist(),
+        df["home_goals"].tolist(), df["away_goals"].tolist(), df["season"].tolist(),
+        _day_bounds(df["date"].dt.normalize()),
+    )
+    feature_arrays = {
+        column: np.empty(len(df), dtype=np.float64) for column in MOV_ELO_COLUMNS
+    }
+    for prefix, regression in MOV_VARIANTS.items():
+        _replay_mov_elo(*columns, regression, prefix, feature_arrays)
+    return pd.concat(
+        [df.reset_index(drop=True), pd.DataFrame(feature_arrays, columns=MOV_ELO_COLUMNS)],
+        axis=1,
+    )
 
 
 _PRIOR_LEAGUE_STATS = (

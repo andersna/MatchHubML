@@ -36,9 +36,10 @@ import pandas as pd  # noqa: E402
 
 from src.predict_match import predict_match  # noqa: E402
 from src.predict_upcoming_match import ODDS_MARKETS, ODDS_PREFERENCE_SQL, odds_probabilities  # noqa: E402
-from src.prediction_log import LOG_PATH, log_predictions, logged_matches  # noqa: E402
+from src.prediction_log import LOG_PATH, log_predictions, logged_matches, match_identity  # noqa: E402
 from src.train_final_nn_odds_asof_day_v1 import ODDS_FEATURES  # noqa: E402
 from src.upcoming_match_features import build_upcoming_match_features_partial, history_team_name  # noqa: E402
+from src.xg_features import load_xg_history  # noqa: E402
 
 RAW_DIR = _PROJECT_ROOT / "data" / "raw"
 OUTCOMES = ("H", "D", "A")
@@ -104,10 +105,11 @@ def backfill(bundles: dict, database_path: Path, *, log_path: Path = LOG_PATH, u
     candidates = []
     for match in matches:
         key = (match["league"], match["match_date"], match["home_team"], match["away_team"])
-        # Only models without any prediction for this match yet, and never one trained on it.
+        # Only models without any prediction for this match yet (under any earlier date),
+        # and never one trained on it.
         versions = [
             version for version, bundle in bundles.items()
-            if (version, *key) not in already
+            if (version, *match_identity(*key)) not in already
             and match["match_date"] > bundle.metadata["training_data"]["end_date"]
         ]
         if not versions:
@@ -140,6 +142,11 @@ def backfill(bundles: dict, database_path: Path, *, log_path: Path = LOG_PATH, u
             if position not in features.index:
                 continue
             model_input = {**features.loc[position].to_dict(), **dict(zip(ODDS_FEATURES, odds))}
+            # xG strictly before the match date, so the match's own xG is never used.
+            model_input.update(load_xg_history().match_features(
+                match["league"], history_team_name(match["league"], match["home_team"]),
+                history_team_name(match["league"], match["away_team"]), match_date,
+            ))
             for version in versions:
                 result = predict_match(model_input, bundle=bundles[version])
                 records.append({
@@ -151,6 +158,7 @@ def backfill(bundles: dict, database_path: Path, *, log_path: Path = LOG_PATH, u
                     "away_team": match["away_team"],
                     "odds_observed_at_utc": source, "odds_market": market, "odds": odds,
                     "probs": [result["probabilities"][label]["decimal"] for label in OUTCOMES],
+                    "expected_goals": (model_input["home_expected_goals"], model_input["away_expected_goals"]),
                 })
     counts["logged"] = log_predictions(records, path=log_path)
     counts["matches_added"] = len({(r["league"], r["match_date"], r["home_team"], r["away_team"]) for r in records})

@@ -5,6 +5,7 @@ Steps:
    features) and the Bet365 odds in the football-data.co.uk workbooks
    (data/raw/historical/*.xls[x] and data/raw/all-euro-data-*.xlsx, which
    the history update keeps current).
+   Understat xG form (data/understat_matches.csv) is added as of each date.
 2. Check that rows already in the current training dataset are reproduced
    exactly (same features and odds), so the pipeline cannot drift silently.
 3. Holdout test: train on every season before the last complete one, test on
@@ -113,12 +114,16 @@ def build_dataset() -> pd.DataFrame:
     combined["date"] = combined["date"].dt.normalize()
 
     dataset = combined.merge(load_bet365_odds(), on=ODDS_MATCH_KEYS, how="inner", validate="one_to_one")
-    dataset = dataset[KEY_COLUMNS + ["result", "season"] + MODEL_FEATURES]
+    dataset = v3.add_xg_features(dataset)
+    dataset = dataset[KEY_COLUMNS + ["result", "season"] + v3.V3_FEATURES]
     return dataset.sort_values(["date", "time"], kind="stable").reset_index(drop=True)
 
 
 def check_reproduction(dataset: pd.DataFrame) -> None:
-    """Rows in the current training dataset must come out identical."""
+    """Rows in the current training dataset must come out identical.
+
+    Only the 30 v1/v2 features are compared: older datasets have no xG.
+    """
     current = pd.read_csv(v3.DATASET_PATH, parse_dates=["date"], low_memory=False)
     merged = current.merge(dataset, on=ODDS_MATCH_KEYS, how="left", suffixes=("_current", "_new"), indicator=True)
     missing = int((merged["_merge"] != "both").sum())
@@ -188,12 +193,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     started = time.perf_counter()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d")
-    artifact_dir = v3.ARTIFACT_DIR.with_name(f"{v3.ARTIFACT_DIR.name}_{stamp}")
-    dataset_path = DATA / f"odds_model_dataset_retrain_{stamp}.csv"
-    if not args.dry_run:
-        for path in (artifact_dir, dataset_path):
-            if path.exists():
-                raise FileExistsError(f"Findes allerede; intet overskrives: {path}")
+    # A second retrain on the same day gets _2, _3, ...: it sorts after the
+    # earlier one, so latest_v3_dir() picks it, and nothing is overwritten.
+    for attempt in range(1, 100):
+        suffix = stamp if attempt == 1 else f"{stamp}_{attempt}"
+        artifact_dir = v3.ARTIFACT_DIR.with_name(f"{v3.ARTIFACT_DIR.name}_{suffix}")
+        dataset_path = DATA / f"odds_model_dataset_retrain_{suffix}.csv"
+        if not (artifact_dir.exists() or dataset_path.exists()):
+            break
+    else:
+        raise FileExistsError(f"For mange gentræninger i dag: {artifact_dir}")
 
     dataset = build_dataset()
     print(
