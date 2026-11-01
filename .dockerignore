@@ -1,0 +1,43 @@
+# Secrets: API keys are passed as environment variables (env_file in compose),
+# never baked into the image.
+.env
+.env.*
+
+# Local environment and build noise
+.venv/
+**/__pycache__/
+**/*.pyc
+.git/
+.github/
+MatchHubML.zip
+*.json.bak
+
+# Not needed to serve the app
+experiments/
+scripts/
+tests/
+docs/
+api_test_after_optimization.json
+matches_debug.json
+
+# data/: ~1.7 GB, mostly experiment output. Only the files the API reads are
+# kept as seed data for the volume.
+data/*
+!data/fixtures.csv
+!data/feature_reference.json
+!data/features_asof_day_v1.csv
+!data/elo_features_asof_day_v1.csv
+!data/nn_market_residual_summary.csv
+!data/nn_pinnacle_xg_summary.csv
+!data/understat_matches.csv
+!data/historical_update_state.json
+!data/last_sync.json
+!data/last_history_refresh.json
+# Match/odds cache and prediction history (no secrets; saves API quota).
+!data/matchhub_cache.sqlite
+!data/prediction_log.sqlite
+# game.sqlite is NOT included: it holds password hashes and session tokens.
+!data/raw
+data/raw/*
+!data/raw/all-euro-data-*.xlsx
+!data/raw/understat

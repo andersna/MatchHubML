@@ -1,0 +1,43 @@
+# MatchHubML as a MiniCloud project, served by MiniCloud's Traefik at
+# http://matchhubml.localhost, and publicly at MATCHHUB_PUBLIC_HOST (e.g.
+# matchhub.example.com) through MiniCloud's Cloudflare tunnel.
+#
+# Deploy through MiniCloud:
+#   minicloud projects create matchhubml --path /workspace/MatchHubML --deploy
+# Or directly (MiniCloud's stack must be running, it owns the network):
+#   docker compose -p matchhubml up -d --build
+services:
+  matchhub:
+    build: .
+    image: matchhubml:latest
+    container_name: matchhubml
+    restart: unless-stopped
+
+    # FOOTBALL_DATA_API_KEY, 5DOLLARFOOTBALL_API_KEY, ... from .env (git- and
+    # docker-ignored). Optional: MATCHHUB_HIDE_MODEL=1 when others play the game.
+    env_file: .env
+
+    # SQLite cache, prediction log and game accounts survive rebuilds and
+    # redeploys. A named volume, not a bind mount: MiniCloud runs compose from
+    # inside its own container, where ./data is not a path the Docker host knows.
+    volumes:
+      - matchhub-data:/app/data
+
+    # No "ports:" on purpose - only Traefik reaches the app.
+    labels:
+      - traefik.enable=true
+      # Always matchhubml.localhost locally; also the public hostname from the
+      # Cloudflare tunnel when MATCHHUB_PUBLIC_HOST is set in .env.
+      - traefik.http.routers.matchhubml.rule=Host(`matchhubml.localhost`) || Host(`${MATCHHUB_PUBLIC_HOST:-matchhubml.localhost}`)
+      - traefik.http.routers.matchhubml.entrypoints=web
+      - traefik.http.services.matchhubml.loadbalancer.server.port=8000
+
+    networks:
+      - minicloud-apps
+
+volumes:
+  matchhub-data:
+
+networks:
+  minicloud-apps:
+    external: true
