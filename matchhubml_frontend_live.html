@@ -52,6 +52,8 @@ label.check{display:flex;align-items:center;gap:6px;color:var(--muted);font-size
 .badge{font-size:11px;border-radius:99px;padding:3px 9px;border:1px solid var(--line);color:var(--muted)}
 .badge.green{border-color:#2d6a5a;color:var(--green);background:#102c2a}.badge.amber{border-color:#6b5426;color:var(--amber);background:#2a2214}
 .badge.blue{border-color:#2a4f86;color:var(--blue);background:#12223d}
+.badge.red{border-color:#773b4b;color:var(--red);background:#321823;font-weight:700}
+.card.live{border-color:#773b4b}.dayhead.live{color:var(--red)}
 details{margin-top:11px;border-top:1px solid var(--line);padding-top:9px}
 summary{cursor:pointer;color:var(--muted);font-size:12px}
 table{width:100%;border-collapse:collapse;font-size:12px}
@@ -338,15 +340,17 @@ function renderCard(m) {
   const fav = bestOutcome(m.probabilities);
   const valueOutcomes = OUTCOMES.filter(([k]) => m.expected_value[k] > 0);
   const badges = [
+    m.in_play ? `<span class="badge red" title="Modellen og oddsene er fra før kampen og kender ikke stillingen.">● LIVE · startede ${kickoffLabel(m.kickoff_at)}</span>` : '',
     `<span class="badge blue">Favorit: ${OUTCOMES.find(o => o[0] === fav)[2]} ${pct(m.probabilities[fav], 0)}</span>`,
     ...valueOutcomes.map(([k, s]) => `<span class="badge green">Værdi på ${s}: EV +${(m.expected_value[k]*100).toFixed(1)}%</span>`),
     maxEdge(m) >= 0.03 ? `<span class="badge amber">Stor afvigelse fra marked</span>` : '',
   ].join('');
-  return `<article class="card">
-    <div class="top"><span class="league">${esc(m.league)}</span><span class="muted">${kickoffLabel(m.kickoff_at)}</span></div>
+  return `<article class="card${m.in_play ? ' live' : ''}">
+    <div class="top"><span class="league">${esc(m.league)}</span><span class="muted">${m.in_play ? 'I gang' : kickoffLabel(m.kickoff_at)}</span></div>
     <div class="teams"><span>${esc(m.home_team)}${formRatingLine(m, 'home')}</span><span class="vs">VS</span><span>${esc(m.away_team)}${formRatingLine(m, 'away')}</span></div>
     <div class="outcomes">${outcomeRows(m)}</div>
     <div class="badges">${badges}</div>
+    ${m.in_play ? '<div class="sub" style="margin-top:8px">Førkampsforudsigelse: modellen og Bet365-oddsene er fra før kickoff og kender ikke stillingen. Den logges ikke.</div>' : ''}
     <details><summary>Alle modeller og features</summary>
       <div style="margin-top:8px">${modelComparison(m)}</div>
       <div style="margin-top:12px">${featureTable(m.features, m.form_rating)}</div>
@@ -373,13 +377,18 @@ function renderMatches() {
     return;
   }
   $('matchState').classList.add('hidden');
+  // Started matches (up to 2 hours after kickoff) get their own section on top.
+  const live = list.filter(m => m.in_play), upcoming = list.filter(m => !m.in_play);
+  const liveHtml = live.length ? `<div class="dayhead live">● I gang nu · ${live.length} ${live.length === 1 ? 'kamp' : 'kampe'}</div><div class="matches">${live.map(renderCard).join('')}</div>` : '';
+  let upcomingHtml;
   if ($('sort').value === 'kickoff') {
     const days = new Map();
-    list.forEach(m => { const key = dayLabel(m.kickoff_at); days.set(key, [...(days.get(key) || []), m]); });
-    $('matchList').innerHTML = [...days].map(([day, items]) => `<div class="dayhead">${day} · ${items.length} kampe</div><div class="matches">${items.map(renderCard).join('')}</div>`).join('');
+    upcoming.forEach(m => { const key = dayLabel(m.kickoff_at); days.set(key, [...(days.get(key) || []), m]); });
+    upcomingHtml = [...days].map(([day, items]) => `<div class="dayhead">${day} · ${items.length} kampe</div><div class="matches">${items.map(renderCard).join('')}</div>`).join('');
   } else {
-    $('matchList').innerHTML = `<div class="matches">${list.map(renderCard).join('')}</div>`;
+    upcomingHtml = upcoming.length ? `${live.length ? '<div class="dayhead">Kommende kampe</div>' : ''}<div class="matches">${upcoming.map(renderCard).join('')}</div>` : '';
   }
+  $('matchList').innerHTML = liveHtml + upcomingHtml;
 }
 
 async function loadMatches() {
@@ -400,7 +409,7 @@ async function loadMatches() {
     $('tabCountMatches').textContent = state.matches.length;
     $('mSkipped').textContent = payload.skipped_count ?? 0;
     $('mValue').textContent = state.matches.reduce((n, m) => n + OUTCOMES.filter(([k]) => m.expected_value[k] > 0).length, 0);
-    const next = [...state.matches].sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at))[0];
+    const next = state.matches.filter(m => !m.in_play).sort((a, b) => a.kickoff_at.localeCompare(b.kickoff_at))[0];
     $('mNext').textContent = next ? dt(next.kickoff_at, {weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'}) : '–';
     $('mNextNote').textContent = next ? `${next.home_team} – ${next.away_team}` : '';
     $('mCountNote').textContent = payload.logged_new ? `${payload.logged_new} nye forudsigelser logget` : 'med gemte Bet365-odds';

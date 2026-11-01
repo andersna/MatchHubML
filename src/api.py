@@ -68,6 +68,10 @@ OUTCOMES = ("H", "D", "A")
 HIDE_MODEL_ENV = "MATCHHUB_HIDE_MODEL"
 SESSION_COOKIE = "matchhub_session"
 BOT_REFRESH_INTERVAL = timedelta(minutes=15)
+# Started matches stay in the Kampe tab this long after kickoff (or until the
+# cache marks them finished), shown as in play. Their predictions are the
+# pre-match ones and are not logged, so the evaluation stays pre-kickoff only.
+IN_PLAY_WINDOW = timedelta(hours=2)
 
 
 def hide_model() -> bool:
@@ -624,8 +628,13 @@ def health():
 
 
 def _upcoming_with_odds(league: str | None, limit: int) -> list[dict]:
-    """Future fixtures joined with their preferred stored Bet365 quote (see ODDS_MARKETS), in one query."""
-    params: list[object] = [_utc_now_iso()]
+    """Future and in-play fixtures (kicked off less than IN_PLAY_WINDOW ago, not
+    finished) joined with their preferred stored Bet365 quote (see ODDS_MARKETS),
+    in one query. Each row gets in_play = kickoff has passed."""
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat(timespec="seconds").replace("+00:00", "Z")
+    cutoff_iso = (now - IN_PLAY_WINDOW).isoformat(timespec="seconds").replace("+00:00", "Z")
+    params: list[object] = [cutoff_iso]
     league_clause = ""
     if league:
         league_clause = " AND m.league = ?"
@@ -656,7 +665,7 @@ def _upcoming_with_odds(league: str | None, limit: int) -> list[dict]:
             """,
             params,
         ).fetchall()
-    return [dict(row) for row in rows]
+    return [dict(row) | {"in_play": row["kickoff_at"] <= now_iso} for row in rows]
 
 
 def _skip(fixture: dict, reason: str) -> dict:
@@ -675,7 +684,7 @@ def list_predictions(
 
 
 def predict_upcoming(model_version: str = DEFAULT_MODEL_VERSION, league: str | None = None, limit: int = 50):
-    """Predict future cached fixtures with stored Bet365 odds (lookup price, else opening).
+    """Predict future and in-play cached fixtures with stored Bet365 odds (lookup price, else opening).
 
     Every available model predicts every match (cheap once features exist);
     all predictions are logged for later scoring, the selected one is returned.
@@ -743,6 +752,8 @@ def predict_upcoming(model_version: str = DEFAULT_MODEL_VERSION, league: str | N
                     result = predict_match(model_input, bundle=bundle)
                     probs = [result["probabilities"][label]["decimal"] for label in OUTCOMES]
                     all_models[version] = {"artifact": result["model_version"], "probs": probs}
+                    if fixture["in_play"]:
+                        continue  # only pre-kickoff predictions are logged and scored
                     log_records.append({
                         "source": "live", "model_version": version,
                         "model_artifact": result["model_version"],
@@ -765,6 +776,7 @@ def predict_upcoming(model_version: str = DEFAULT_MODEL_VERSION, league: str | N
                 "league": fixture["league"],
                 "match_date": str(parsed_date.date()),
                 "kickoff_at": fixture["kickoff_at"],
+                "in_play": fixture["in_play"],
                 "home_team": fixture["home_team"],
                 "away_team": fixture["away_team"],
                 "model_version_selected": selected_version,
