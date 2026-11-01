@@ -24,7 +24,7 @@ import time
 from urllib.parse import quote
 
 import pandas as pd
-from fastapi import Cookie, FastAPI, HTTPException, Query, Response
+from fastapi import Cookie, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -1030,9 +1030,18 @@ def _player(session: str | None) -> dict:
     return user
 
 
-def _set_session(response: Response, token: str) -> None:
+def _is_https(request: Request) -> bool:
+    """True when the browser talks HTTPS: directly, or through Cloudflare's tunnel
+    (cloudflared -> Traefik -> app is plain HTTP, so Cloudflare's CF-Visitor header
+    is what still says https; Traefik passes it through untouched)."""
+    return request.url.scheme == "https" or '"https"' in request.headers.get("cf-visitor", "")
+
+
+def _set_session(request: Request, response: Response, token: str) -> None:
+    # Secure only over HTTPS, so local http://...localhost logins keep working.
     response.set_cookie(
         SESSION_COOKIE, token, max_age=game.SESSION_DAYS * 86400, httponly=True, samesite="lax",
+        secure=_is_https(request),
     )
 
 
@@ -1046,14 +1055,14 @@ def _game_call(function, *args, **kwargs):
 
 
 @app.post("/api/game/register")
-def game_register(credentials: Credentials, response: Response):
-    _set_session(response, _game_call(game.register, credentials.username, credentials.password))
+def game_register(credentials: Credentials, request: Request, response: Response):
+    _set_session(request, response, _game_call(game.register, credentials.username, credentials.password))
     return {"ok": True}
 
 
 @app.post("/api/game/login")
-def game_login(credentials: Credentials, response: Response):
-    _set_session(response, _game_call(game.login, credentials.username, credentials.password))
+def game_login(credentials: Credentials, request: Request, response: Response):
+    _set_session(request, response, _game_call(game.login, credentials.username, credentials.password))
     return {"ok": True}
 
 
