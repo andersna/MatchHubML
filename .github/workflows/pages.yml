@@ -15,7 +15,7 @@ on:
     - cron: "17 * * * *"  # hourly; off the full hour, when GitHub's scheduler is busiest
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [master, main]
 
 permissions:
   contents: write  # upload the state release asset
