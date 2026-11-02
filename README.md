@@ -62,6 +62,31 @@ Press *Synkronisér* / *Hent nyeste fil nu* in the Data tab to fetch fixtures, o
 results. Retrain the model on new data with `python src/retrain_v3.py`.
 Tests: `python -m unittest discover -s tests -t .` (also run by GitHub Actions).
 
+## GitHub Pages
+
+`.github/workflows/pages.yml` publishes a static, read-only version of the dashboard
+(matches, results, models, data; no prediction game) and keeps it current: every
+hour it runs the same sync as the Data tab's button, exports each API response the
+frontend reads to `data/<name>.json` (`src/export_static.py`) and deploys the result.
+The match/odds cache, prediction log and history are carried between runs as
+`matchhubml-state.tar.gz` in a release tagged `state`, so they never enter git history.
+
+One-time setup, in a **public** repository (Pages and unlimited Actions minutes are
+free there; the code, `fixtures.csv` and the state archive are then public, the API
+keys are not):
+
+1. *Settings → Secrets and variables → Actions*: add `FOOTBALL_DATA_API_KEY` and
+   `FIVEDOLLARFOOTBALL_API_KEY` (the 5DollarFootball key; secret names cannot start
+   with a digit).
+2. *Settings → Pages → Source*: **GitHub Actions**.
+3. Create the starting state from your local data and attach it to a release:
+   `python -m src.export_static pack matchhubml-state.tar.gz`, then *Releases → Draft a
+   new release*, tag `state`, attach the file, publish.
+4. *Actions → Update and publish → Run workflow* (later runs start on their own).
+
+Preview locally: `python -m src.export_static export site --no-sync`, then
+`python -m http.server -d site`.
+
 ## Repository layout
 
 | Path | Contents |

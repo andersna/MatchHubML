@@ -270,13 +270,33 @@ const kickoffLabel = raw => dt(raw, {hour:'2-digit', minute:'2-digit'});
 const dayLabel = raw => dt(raw, {weekday:'long', day:'numeric', month:'long'});
 const shortDate = raw => dt(raw, {day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'});
 
+// Static build (GitHub Pages): window.MATCHHUB_STATIC is injected by src/export_static.py,
+// and every GET reads data/<name>.json. staticName() mirrors static_name() there.
+const STATIC = window.MATCHHUB_STATIC || null;
+function staticName(path) {
+  const url = new URL(path, location.href);
+  let name = url.pathname.replace(/^.*\/api\//, '').replace(/\/+$/, '').replaceAll('/', '-');
+  if (name === 'matches') {
+    const league = url.searchParams.get('league');
+    name = `matches-${url.searchParams.get('model_version') || 'v3'}-${league ? league.trim().toLowerCase().replaceAll(' ', '-') : 'all'}`;
+  }
+  return name;
+}
 async function api(path, options={}) {
+  if (STATIC) {
+    if ((options.method || 'GET') !== 'GET') throw new Error('Ikke muligt på den statiske side – data opdateres automatisk hver time.');
+    path = `data/${staticName(path)}.json`;
+  }
   const response = await fetch(path, {headers:{Accept:'application/json'}, cache:'no-store', ...options});
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+  if (!response.ok || (STATIC && payload.status_code)) throw new Error(payload.detail || `HTTP ${response.status}`);
   return payload;
 }
-function setApiStatus(text, kind='') { $('apiStatus').className = `status ${kind}`; $('apiStatus').textContent = `● ${text}`; }
+function setApiStatus(text, kind='') {
+  if (STATIC && kind === 'ok') text = `Opdateret ${shortDate(STATIC.generated)} (${ageLabel(STATIC.generated)})`;
+  $('apiStatus').className = `status ${kind}`;
+  $('apiStatus').textContent = `● ${text}`;
+}
 
 /* ---------- Tabs ---------- */
 document.querySelectorAll('nav button').forEach(button => button.addEventListener('click', () => showTab(button.dataset.tab)));
@@ -422,7 +442,7 @@ async function loadMatches() {
     if (current !== requestNumber) return;
     state.matches = [];
     $('matchList').innerHTML = '';
-    $('matchState').innerHTML = `<div class="notice error">Kunne ikke hente kampe: ${esc(error.message)}. Kontrollér at backenden kører (<code>uvicorn src.api:app</code>).</div>`;
+    $('matchState').innerHTML = `<div class="notice error">Kunne ikke hente kampe: ${esc(error.message)}. ${STATIC ? 'Prøv at genindlæse siden.' : 'Kontrollér at backenden kører (<code>uvicorn src.api:app</code>).'}</div>`;
     setApiStatus('API ikke tilgængelig', 'error');
   } finally {
     if (current === requestNumber) $('refresh').disabled = false;
@@ -814,6 +834,7 @@ function stackBar(counts, total) {
 }
 
 function pressesText(presses) {
+  if (STATIC) return presses === 0 ? 'Alt, der kan hentes, er hentet.' : `Hentes automatisk over de næste ca. ${presses} timer.`;
   return presses === 0 ? 'Alt, der kan hentes, er hentet.' : presses === 1 ? 'Tryk 1 gang mere.' : `Tryk ca. ${presses} gange mere.`;
 }
 
@@ -839,7 +860,7 @@ function renderCoverage(c) {
   const banner = $('oddsBanner');
   if (c.fetchable + c.not_listed + c.no_odds_yet > 0) {
     banner.innerHTML = `${c.total - c.has_odds} af ${c.total} kommende kampe mangler odds og kan derfor ikke forudsiges endnu` +
-      (c.fetchable ? ` · <b>${c.fetchable} kan hentes nu</b> (${pressesText(c.presses_needed).toLowerCase()}) <a href="#data" id="bannerLink">Gå til synkronisering →</a>` : '.');
+      (c.fetchable ? ` · <b>${c.fetchable} kan hentes nu</b> (${pressesText(c.presses_needed).toLowerCase()}) <a href="#data" id="bannerLink">${STATIC ? 'Se odds-dækning' : 'Gå til synkronisering'} →</a>` : '.');
     banner.classList.remove('hidden');
     const link = $('bannerLink');
     if (link) link.addEventListener('click', event => { event.preventDefault(); showTab('data'); });
@@ -1010,7 +1031,21 @@ async function init() {
   $('historyButton').addEventListener('click', refreshHistory);
   $('resultModel').addEventListener('change', renderResultTable);
   $('showSkipped').addEventListener('click', event => { event.preventDefault(); $('skippedBox').classList.toggle('hidden'); });
-  initGame();
+  if (STATIC) {
+    // No backend: no game and no manual sync. The scheduled GitHub Action syncs every hour.
+    document.querySelector('nav button[data-tab=game]').classList.add('hidden');
+    document.querySelectorAll('#syncButton, #historyButton').forEach(button => {
+      button.closest('.syncrow').innerHTML = '<div class="sub">Opdateres automatisk hver time: kampe, resultater, op til 5 nye odds pr. opdatering og sæsonfilen (højst hver 12. time).</div>';
+    });
+    // The Data tab's fixed texts talk about pressing the sync button.
+    const rewrites = [['Hvert tryk henter op til 5 odds', 'Hver opdatering henter op til 5 odds'], ['Tryk igen om et par dage.', 'Den hentes automatisk, når den er klar.']];
+    const walker = document.createTreeWalker($('tab-data'), NodeFilter.SHOW_TEXT);
+    for (let node; (node = walker.nextNode());) rewrites.forEach(([from, to]) => { node.nodeValue = node.nodeValue.replace(from, to); });
+    document.querySelector('footer').textContent = 'MatchHubML · opdateres automatisk hver time · forudsigelser er modelestimater, ikke garantier';
+    state.hideModel = false;
+  } else {
+    initGame();
+  }
   if (state.hideModel) {
     // The prediction league is running: the model's pre-kickoff predictions stay hidden.
     document.querySelector('nav button[data-tab=matches]').classList.add('hidden');
@@ -1021,7 +1056,7 @@ async function init() {
   }
   loadPerformance();
   loadCoverage();
-  const tabs = ['matches', 'game', 'results', 'models', 'data'];
+  const tabs = STATIC ? ['matches', 'results', 'models', 'data'] : ['matches', 'game', 'results', 'models', 'data'];
   let tab = location.hash.slice(1);
   if (!tabs.includes(tab)) {
     try { tab = localStorage.getItem('matchhub-tab'); } catch (_) {}

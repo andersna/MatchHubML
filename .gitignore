@@ -20,3 +20,7 @@ data/*
 # Local debug output
 api_test_after_optimization.json
 matches_debug.json
+
+# GitHub Pages: generated site and the state archive (attached to the "state" release)
+site/
+matchhubml-state.tar.gz

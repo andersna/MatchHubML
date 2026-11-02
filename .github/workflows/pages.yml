@@ -1,0 +1,82 @@
+# Syncs MatchHubML every hour and publishes the dashboard to GitHub Pages.
+#
+# State (match/odds cache, prediction log, history) lives in the "state" release as
+# matchhubml-state.tar.gz, not in git: each run downloads it, syncs, uploads it again.
+#
+# One-time setup (see README, "GitHub Pages"):
+#   - Secrets: FOOTBALL_DATA_API_KEY and FIVEDOLLARFOOTBALL_API_KEY
+#   - Settings > Pages > Source: GitHub Actions
+#   - A release tagged "state" with matchhubml-state.tar.gz attached
+#     (python -m src.export_static pack matchhubml-state.tar.gz)
+name: Update and publish
+
+on:
+  schedule:
+    - cron: "17 * * * *"  # hourly; off the full hour, when GitHub's scheduler is busiest
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write  # upload the state release asset
+  pages: write
+  id-token: write
+
+# Never two runs at once: both would start from the same state and one would be lost.
+concurrency:
+  group: matchhubml-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATE_ASSET: matchhubml-state.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        # CPU-only PyTorch, as in the Dockerfile; lightgbm is only for experiments.
+        run: |
+          pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+          grep -vE '^(torch|lightgbm)==' requirements.txt > "$RUNNER_TEMP/requirements.txt"
+          pip install -r "$RUNNER_TEMP/requirements.txt"
+
+      - name: Restore state
+        run: |
+          gh release download state --pattern "$STATE_ASSET" --dir "$RUNNER_TEMP" \
+            || { echo "::error::No $STATE_ASSET in the 'state' release. See the README section 'GitHub Pages'."; exit 1; }
+          python -m src.export_static unpack "$RUNNER_TEMP/$STATE_ASSET"
+
+      - name: Sync and export
+        env:
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+          FIVEDOLLARFOOTBALL_API_KEY: ${{ secrets.FIVEDOLLARFOOTBALL_API_KEY }}
+        # The app reads 5DOLLARFOOTBALL_API_KEY, which is not a valid secret name, so the
+        # keys are written to .env (never committed, and gone when the runner is).
+        run: |
+          printf 'FOOTBALL_DATA_API_KEY=%s\n5DOLLARFOOTBALL_API_KEY=%s\n' \
+            "$FOOTBALL_DATA_API_KEY" "$FIVEDOLLARFOOTBALL_API_KEY" > .env
+          python -m src.export_static export site
+
+      - name: Save state
+        run: |
+          python -m src.export_static pack "$RUNNER_TEMP/$STATE_ASSET"
+          gh release upload state "$RUNNER_TEMP/$STATE_ASSET" --clobber
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
