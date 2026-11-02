@@ -60,6 +60,30 @@ class PredictionLogTests(unittest.TestCase):
         self.assertAlmostEqual(report["odds"]["log_loss"], -math.log(0.5))
         self.assertEqual(models["v3"]["cumulative_delta_log_loss"], [round(-math.log(0.6) + math.log(0.5), 6)])
 
+    def test_each_model_is_compared_with_the_market_on_its_own_matches(self):
+        with closing(sqlite3.connect(self.cache)) as connection, connection:
+            connection.execute(
+                "INSERT INTO matches VALUES ('football-data.org', 'Premier League', '2026-10-25', "
+                "'Other FC', 'Away FC', 'FINISHED', 0, 2, 'A')"
+            )
+        prediction_log.log_predictions([
+            # The market favours the home team in both: right on Home FC (H), wrong on Other FC (A).
+            _record("v1", (0.6, 0.25, 0.15)),
+            _record("v1", (0.5, 0.3, 0.2), home="Other FC"),
+            _record("v3", (0.6, 0.25, 0.15)),  # v3 only has the first match
+        ], path=self.log)
+
+        report = prediction_log.evaluate(self.cache, path=self.log)
+        models = {row["model"]: row for row in report["models"]}
+
+        self.assertEqual(report["odds"]["accuracy"], 0.5)  # all matches
+        self.assertEqual(models["v1"]["odds_accuracy"], 0.5)
+        self.assertEqual(models["v3"]["odds_accuracy"], 1.0)  # only v3's match
+        self.assertAlmostEqual(models["v3"]["odds_log_loss"], -math.log(0.5))
+        self.assertAlmostEqual(models["v3"]["odds_log_loss"] + models["v3"]["delta_log_loss_vs_odds"],
+                               models["v3"]["log_loss"])
+        self.assertNotIn("odds_accuracy", report["odds"])
+
     def _cache_with_odds(self):
         """A cache like the real one: matches with match_id, and the odds snapshots."""
         cache = Path(self.temp.name) / "cache_with_odds.sqlite"

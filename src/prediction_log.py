@@ -232,7 +232,7 @@ def _summary(label: str, entries: list[dict[str, Any]], key: str) -> dict[str, A
         math.sqrt(sum((d - mean_delta) ** 2 for d in deltas) / (count - 1) / count)
         if count > 1 else None
     )
-    return {
+    summary = {
         "model": label,
         "matches": count,
         "accuracy": sum(entry[key]["hit"] for entry in entries) / count,
@@ -241,6 +241,13 @@ def _summary(label: str, entries: list[dict[str, Any]], key: str) -> dict[str, A
         "delta_log_loss_vs_odds": mean_delta,
         "delta_log_loss_vs_odds_se": se,
     }
+    if key != "odds":
+        # The market on exactly this model's matches: models cover different matches
+        # (a newer model has fewer), so the overall odds summary is not comparable.
+        summary["odds_accuracy"] = sum(entry["odds"]["hit"] for entry in entries) / count
+        summary["odds_log_loss"] = sum(entry["odds"]["log_loss"] for entry in entries) / count
+        summary["odds_brier_score"] = sum(entry["odds"]["brier"] for entry in entries) / count
+    return summary
 
 
 def evaluate(

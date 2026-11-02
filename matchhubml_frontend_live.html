@@ -750,14 +750,15 @@ async function loadPerformance() {
     $('perfMetrics').innerHTML = [
       ['Vurderede kampe', perf.matches.length, `${backfilled} rekonstrueret · ${perf.matches.length - backfilled} live`],
       ['Afventer resultat', perf.pending, 'logget før kickoff'],
-      ['V3 træfsikkerhed', v3 ? pct(v3.accuracy) : '–', `marked ${pct(perf.odds.accuracy)}`],
+      ['V3 træfsikkerhed', v3 ? pct(v3.accuracy) : '–', v3 ? `marked ${pct(v3.odds_accuracy)} på de samme ${v3.matches} kampe` : ''],
       ['V3 Δ log loss mod odds', v3 ? signed(v3.delta_log_loss_vs_odds, 4) : '–', v3 && v3.delta_log_loss_vs_odds_se != null ? `± ${num(v3.delta_log_loss_vs_odds_se, 4)} (standardfejl)` : ''],
     ].map(([label, value, note]) => `<div class="metric"><div class="label">${label}</div><div class="value">${value}</div><div class="note">${note}</div></div>`).join('');
     const series = perf.models.map(m => ({name: m.model, color: MODEL_COLORS[m.model] || '#fff', values: m.cumulative_delta_log_loss}));
     $('chartLegend').innerHTML = series.map(s => `<span><i style="background:${s.color}"></i>${s.name.toUpperCase()}</span>`).join('') + `<span><i style="background:#93a3c0"></i>Bet365-odds (nul-linjen)</span>`;
     $('chart').innerHTML = perf.matches.length ? lineChart(series) : '<div class="state">Ingen vurderede kampe endnu.</div>';
-    const rows = [...perf.models, perf.odds];
-    $('perfTable').innerHTML = `<tr><th>Model</th><th>Kampe</th><th>Træfsikkerhed</th><th>Log loss</th><th>Brier</th><th>Δ log loss mod odds</th></tr>` + rows.map(m => `<tr><td>${m.model === 'odds' ? 'Bet365-odds' : m.model.toUpperCase()}</td><td>${m.matches}</td><td>${pct(m.accuracy)}</td><td>${num(m.log_loss, 4)}</td><td>${num(m.brier_score, 4)}</td><td class="${cls(m.delta_log_loss_vs_odds, true)}">${m.model === 'odds' ? '–' : `${signed(m.delta_log_loss_vs_odds)} ± ${num(m.delta_log_loss_vs_odds_se, 4)}`}</td></tr>`).join('');
+    // Each model next to Bet365 on exactly its own matches (models cover different matches).
+    $('perfTable').innerHTML = `<tr><th>Model</th><th>Kampe</th><th>Træfsikkerhed</th><th>Log loss</th><th>Brier</th><th>Δ log loss mod odds</th></tr>` + perf.models.map(m => `<tr><td><b>${m.model.toUpperCase()}</b></td><td>${m.matches}</td><td>${pct(m.accuracy)}</td><td>${num(m.log_loss, 4)}</td><td>${num(m.brier_score, 4)}</td><td class="${cls(m.delta_log_loss_vs_odds, true)}">${signed(m.delta_log_loss_vs_odds)} ± ${num(m.delta_log_loss_vs_odds_se, 4)}</td></tr>
+      <tr class="muted"><td>Bet365-odds, samme kampe</td><td>${m.matches}</td><td>${pct(m.odds_accuracy)}</td><td>${num(m.odds_log_loss, 4)}</td><td>${num(m.odds_brier_score, 4)}</td><td>–</td></tr>`).join('');
     $('resultModel').innerHTML = perf.models.map(m => `<option value="${m.model}">${m.model.toUpperCase()}</option>`).join('');
     if (perf.models.some(m => m.model === 'v3')) $('resultModel').value = 'v3';
     $('pendingNote').textContent = `${perf.pending} kampe afventer resultat · ${perf.logged} forudsigelser logget i alt`;
