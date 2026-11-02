@@ -39,7 +39,7 @@ from .predict_upcoming_match import (
     odds_probabilities,
 )
 from . import game, prediction_log
-from .backfill_prediction_log import backfill as backfill_predictions
+from .backfill_prediction_log import WORKBOOK_ODDS_TAG, backfill as backfill_predictions, workbook_odds
 from .update_historical_data import update_historical_data
 from .build_elo_features_asof_day_v1 import replay_form_ratings
 from .collect_understat_xg import update_understat_matches
@@ -489,6 +489,24 @@ def history_results(keys: list[tuple[str, str, str, str]]) -> dict[tuple, dict]:
     return found
 
 
+@lru_cache(maxsize=1)
+def _workbook_odds(signature: tuple) -> dict[tuple, tuple[float, float, float]]:
+    return workbook_odds(DATA_DIR / "raw")
+
+
+def history_odds(row: dict) -> tuple[float, float, float] | None:
+    """Bet365 decimal odds from the season workbook, for log rows whose odds came from it."""
+    if row["odds_market"] != WORKBOOK_ODDS_TAG:
+        return None
+    files = sorted((DATA_DIR / "raw").glob("all-euro-data-*.xlsx"))
+    if not files:
+        return None
+    book = _workbook_odds(tuple((path.name, path.stat().st_mtime_ns) for path in files))
+    league = row["league"]
+    return book.get((league, row["match_date"],
+                     history_team_name(league, row["home_team"]), history_team_name(league, row["away_team"])))
+
+
 @lru_cache(maxsize=4)
 def _workbook_summary(path_text: str, mtime_ns: int) -> dict:
     path = Path(path_text)
@@ -826,7 +844,7 @@ def predict_upcoming(model_version: str = DEFAULT_MODEL_VERSION, league: str | N
 def performance():
     """Logged predictions scored against finished results, per model and vs. the odds."""
     try:
-        return prediction_log.evaluate(DATABASE_PATH, fallback_results=history_results)
+        return prediction_log.evaluate(DATABASE_PATH, fallback_results=history_results, fallback_odds=history_odds)
     except (sqlite3.Error, FileNotFoundError) as exc:
         raise HTTPException(status_code=500, detail=f"Kunne ikke evaluere forudsigelser: {exc}") from exc
 

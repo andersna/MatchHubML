@@ -60,6 +60,54 @@ class PredictionLogTests(unittest.TestCase):
         self.assertAlmostEqual(report["odds"]["log_loss"], -math.log(0.5))
         self.assertEqual(models["v3"]["cumulative_delta_log_loss"], [round(-math.log(0.6) + math.log(0.5), 6)])
 
+    def _cache_with_odds(self):
+        """A cache like the real one: matches with match_id, and the odds snapshots."""
+        cache = Path(self.temp.name) / "cache_with_odds.sqlite"
+        with closing(sqlite3.connect(cache)) as connection, connection:
+            connection.execute(
+                """CREATE TABLE matches (match_id INTEGER PRIMARY KEY, data_source TEXT, league TEXT,
+                match_date TEXT, home_team TEXT, away_team TEXT, match_status TEXT, home_score INT,
+                away_score INT, result TEXT)"""
+            )
+            connection.execute(
+                """CREATE TABLE odds_observations (match_id INT, market TEXT, odds_home REAL,
+                odds_draw REAL, odds_away REAL, observed_at_utc TEXT)"""
+            )
+            # Played on the 26th although logged for the 25th: matched on match_identity.
+            connection.execute(
+                "INSERT INTO matches VALUES (1, 'football-data.org', 'Premier League', '2026-10-26', "
+                "'Home FC', 'Away FC', 'FINISHED', 2, 1, 'H')"
+            )
+            connection.executemany("INSERT INTO odds_observations VALUES (1, ?, ?, ?, ?, ?)", [
+                ("1X2:opening", 2.10, 3.30, 3.60, "2026-10-19T08:00:00Z"),
+                ("1X2:closing", 1.95, 3.40, 4.00, "2026-10-19T08:00:00Z"),
+                ("1X2:closing", 1.80, 3.50, 4.50, "2026-10-24T08:00:00Z"),  # a later snapshot
+            ])
+        return cache
+
+    def test_decimal_odds_come_from_the_same_snapshot_as_the_prediction(self):
+        prediction_log.log_predictions([_record("v3", (0.6, 0.25, 0.15), market="1X2:closing")], path=self.log)
+
+        match = prediction_log.evaluate(self._cache_with_odds(), path=self.log)["matches"][0]
+
+        self.assertEqual(match["odds"]["decimal"], [1.95, 3.40, 4.00])
+
+    def test_decimal_odds_fall_back_and_are_none_when_unknown(self):
+        prediction_log.log_predictions(
+            [_record("v3", (0.6, 0.25, 0.15), market="football-data.co.uk:B365")], path=self.log)
+        asked = []
+
+        def workbook(row):
+            asked.append(row["odds_market"])
+            return (2.0, 3.25, 3.9)
+
+        with_fallback = prediction_log.evaluate(self._cache_with_odds(), path=self.log, fallback_odds=workbook)
+        without = prediction_log.evaluate(self.cache, path=self.log)  # old cache: no odds table
+
+        self.assertEqual(asked, ["football-data.co.uk:B365"])
+        self.assertEqual(with_fallback["matches"][0]["odds"]["decimal"], [2.0, 3.25, 3.9])
+        self.assertIsNone(without["matches"][0]["odds"]["decimal"])
+
     def test_same_lookup_is_logged_once_per_price_type(self):
         # One 5DollarFootball lookup stores opening and lookup price with the same timestamp.
         opening = prediction_log.log_predictions([_record("v3", (0.5, 0.3, 0.2), market="1X2:opening")], path=self.log)

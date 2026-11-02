@@ -193,6 +193,27 @@ def _finished_results(cache_path: Path) -> dict[tuple, dict[str, Any]]:
     }
 
 
+def _cached_decimal_odds(cache_path: Path) -> dict[tuple, tuple[float, float, float]]:
+    """(match_identity, market, observed_at_utc) -> decimal odds of that snapshot in the cache.
+
+    The log keeps only the odds' probabilities; this finds the prices they came from.
+    """
+    uri = "file:" + quote(Path(cache_path).resolve().as_posix(), safe="/:\\") + "?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True, timeout=5)) as connection:
+        tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        if "odds_observations" not in tables:
+            return {}
+        rows = connection.execute(
+            """SELECT m.league, m.match_date, m.home_team, m.away_team, o.market, o.observed_at_utc,
+                      o.odds_home, o.odds_draw, o.odds_away
+            FROM odds_observations o JOIN matches m ON m.match_id = o.match_id"""
+        ).fetchall()
+    return {
+        (match_identity(league, match_date, home, away), market, observed): (odds_home, odds_draw, odds_away)
+        for league, match_date, home, away, market, observed, odds_home, odds_draw, odds_away in rows
+    }
+
+
 def _scores(probs: list[float], result: str) -> tuple[float, float, bool]:
     index = OUTCOMES.index(result)
     log_loss = -math.log(max(probs[index], 1e-15))
@@ -227,11 +248,15 @@ def evaluate(
     *,
     path: Path = LOG_PATH,
     fallback_results: Callable[[list[tuple]], dict[tuple, dict[str, Any]]] | None = None,
+    fallback_odds: Callable[[dict[str, Any]], tuple[float, float, float] | None] | None = None,
 ) -> dict[str, Any]:
     """Score logged predictions against finished matches.
 
     Results come from the match cache; ``fallback_results`` can supply results
     for logged matches the cache no longer covers (e.g. from fixtures.csv).
+    Each match's ``odds.decimal`` holds the decimal odds the predictions were compared
+    with: from the cache's odds snapshot, else ``fallback_odds(log row)`` (e.g. the
+    season workbook), else None.
     """
     if not Path(path).is_file():
         return {"models": [], "odds": {"model": "odds", "matches": 0}, "matches": [], "pending": 0, "logged": 0}
@@ -269,19 +294,24 @@ def evaluate(
             continue  # a real pre-kickoff prediction beats a reconstruction
         entry["models"][row["model_version"]] = row
 
+    prices = _cached_decimal_odds(cache_path) if by_match else {}
     scored = []
     for identity, entry in by_match.items():
         result = results[identity]
         first = next(iter(entry["models"].values()))
         odds = [first["odds_prob_home"], first["odds_prob_draw"], first["odds_prob_away"]]
         odds_ll, odds_brier, odds_hit = _scores(odds, result["result"])
+        decimal = prices.get((identity, first["odds_market"], first["odds_observed_at_utc"]))
+        if decimal is None and fallback_odds is not None:
+            decimal = fallback_odds(first)
         item = {
             "league": identity[0], "match_date": result.get("match_date") or first["match_date"],
             "home_team": identity[2], "away_team": identity[3],
             "kickoff_at": result.get("kickoff_at") or first["kickoff_at"],
             "home_score": result["home_score"], "away_score": result["away_score"],
             "result": result["result"],
-            "odds": {"probs": odds, "log_loss": odds_ll, "brier": odds_brier, "hit": odds_hit},
+            "odds": {"probs": odds, "decimal": list(decimal) if decimal else None,
+                     "log_loss": odds_ll, "brier": odds_brier, "hit": odds_hit},
             "sources": sorted({row["source"] for row in entry["models"].values()}),
         }
         for version, row in entry["models"].items():

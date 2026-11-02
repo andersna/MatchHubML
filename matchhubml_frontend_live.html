@@ -733,11 +733,11 @@ function lineChart(series) {
 function renderResultTable() {
   const perf = state.performance, version = $('resultModel').value;
   const rows = [...perf.matches].reverse().filter(m => m[version]);
-  $('resultTable').innerHTML = rows.length ? `<tr><th>Kickoff</th><th class="l">Kamp</th><th>Resultat</th><th>Model 1/X/2</th><th>Marked 1/X/2</th><th>Model på udfald</th><th>Marked på udfald</th><th>Ramt</th><th class="l">Kilde</th></tr>` + rows.map(m => {
+  $('resultTable').innerHTML = rows.length ? `<tr><th>Kickoff</th><th class="l">Kamp</th><th>Resultat</th><th>Model 1/X/2</th><th>Marked 1/X/2</th><th>Model på udfald</th><th>Marked på udfald</th><th title="Bet365-odds på det rigtige udfald, fra samme opslag som forudsigelsen">Odds på udfald</th><th>Ramt</th><th class="l">Kilde</th></tr>` + rows.map(m => {
     const p = m[version], index = 'HDA'.indexOf(m.result);
     const fmt = probs => probs.map(v => Math.round(v * 100)).join(' / ');
     const better = p.probs[index] > m.odds.probs[index];
-    return `<tr><td>${shortDate(m.kickoff_at || m.match_date)}</td><td class="l">${esc(m.home_team)} – ${esc(m.away_team)}</td><td>${m.home_score}–${m.away_score} (${OUTCOMES[index][1]})</td><td>${fmt(p.probs)}</td><td>${fmt(m.odds.probs)}</td><td class="${better ? 'pos' : 'neg'}">${pct(p.probs[index])}</td><td>${pct(m.odds.probs[index])}</td><td class="${p.hit ? 'hit' : 'miss'}">${p.hit ? '✓' : '✗'}</td><td class="l"><span class="badge ${p.source === 'live' ? 'green' : ''}">${p.source === 'live' ? 'live' : 'rekonstrueret'}</span></td></tr>`;
+    return `<tr><td>${shortDate(m.kickoff_at || m.match_date)}</td><td class="l">${esc(m.home_team)} – ${esc(m.away_team)}</td><td>${m.home_score}–${m.away_score} (${OUTCOMES[index][1]})</td><td>${fmt(p.probs)}</td><td>${fmt(m.odds.probs)}</td><td class="${better ? 'pos' : 'neg'}">${pct(p.probs[index])}</td><td>${pct(m.odds.probs[index])}</td><td>${num(m.odds.decimal?.[index], 2)}</td><td class="${p.hit ? 'hit' : 'miss'}">${p.hit ? '✓' : '✗'}</td><td class="l"><span class="badge ${p.source === 'live' ? 'green' : ''}">${p.source === 'live' ? 'live' : 'rekonstrueret'}</span></td></tr>`;
   }).join('') : '<tr><td>Ingen vurderede kampe for denne model endnu.</td></tr>';
 }
 
