@@ -7,10 +7,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from cryptography.exceptions import InvalidTag
 from fastapi import HTTPException
 
 from src import api, export_static
-from src.export_static import pack, static_name, unpack
+from src.export_static import decrypt_admin, encrypt_admin, pack, static_name, unpack
 
 
 class StaticNameTests(unittest.TestCase):
@@ -56,11 +57,13 @@ class StateArchiveTests(unittest.TestCase):
 
 
 class ExportTests(unittest.TestCase):
-    def test_writes_every_file_the_frontend_reads(self):
-        calls = []
+    def setUp(self):
+        self.calls = []
 
+    def _export(self, admin_password=None):
+        """Export with stubbed endpoints; returns (data files by name, index.html, stale file still there)."""
         def predictions(version, league, limit):
-            calls.append((version, league, limit))
+            self.calls.append((version, league, limit))
             return {"matches": [], "skipped": [], "version": version, "league": league}
 
         def failing_sync():
@@ -69,9 +72,9 @@ class ExportTests(unittest.TestCase):
         stubs = {
             "sync_data": failing_sync,
             "health": lambda: {"available_models": {"v1": True, "v2": False, "v3": True}, "default_model": "v3"},
-            "status": lambda: {"ok": True},
+            "status": lambda: {"sources": "football-data.org"},
             "get_odds_coverage": lambda: {"total": 0},
-            "last_sync": lambda: {"status": "none"},
+            "last_sync": lambda: {"api_calls": {"5dollarfootballapi": {"calls": 3}}},
             "history_status": lambda: {"workbook": None},
             "models": lambda: {"models": []},
             "performance": lambda: {"rows": []},
@@ -82,11 +85,17 @@ class ExportTests(unittest.TestCase):
             out.mkdir()
             Path(out, "stale.json").write_text("{}")  # left over from an earlier export
 
-            export_static.export(out, now=datetime(2026, 11, 2, 20, 0, tzinfo=timezone.utc))
+            export_static.export(out, now=datetime(2026, 11, 2, 20, 0, tzinfo=timezone.utc),
+                                 admin_password=admin_password)
 
             data = {p.stem: json.loads(p.read_text(encoding="utf-8")) for p in (out / "data").glob("*.json")}
+            raw = "".join(p.read_text(encoding="utf-8") for p in (out / "data").glob("*.json"))
             html = (out / "index.html").read_text(encoding="utf-8")
-            stale_exists = Path(out, "stale.json").exists()
+            return data, raw, html, Path(out, "stale.json").exists()
+
+    def test_writes_every_file_the_frontend_reads(self):
+        calls = self.calls
+        data, _, html, stale_exists = self._export(admin_password="correct horse battery staple")
 
         # A failed sync still publishes the existing data.
         self.assertEqual(data["health"]["default_model"], "v3")
@@ -99,11 +108,56 @@ class ExportTests(unittest.TestCase):
         self.assertIn('window.MATCHHUB_STATIC = {"generated": "2026-11-02T20:00:00+00:00"}', html)
         self.assertFalse(stale_exists)
 
+    def test_data_tab_is_only_published_encrypted(self):
+        data, raw, _, _ = self._export(admin_password="correct horse battery staple")
+
+        for name in export_static.ADMIN_FILES:
+            self.assertNotIn(name, data)
+        # The data providers named by the Data tab's files appear nowhere in plain text.
+        self.assertNotIn("football-data", raw)
+        self.assertNotIn("5dollarfootball", raw)
+        admin = decrypt_admin(data["admin"], "correct horse battery staple")
+        self.assertEqual(admin["status"], {"sources": "football-data.org"})
+        self.assertEqual(admin["sync-last"]["api_calls"]["5dollarfootballapi"]["calls"], 3)
+
+    def test_without_password_the_data_tab_is_left_out(self):
+        data, raw, _, _ = self._export(admin_password=None)
+
+        self.assertNotIn("admin", data)
+        self.assertNotIn("status", data)
+        self.assertNotIn("football-data", raw)
+
     def test_failed_endpoint_is_exported_as_its_error(self):
         def refused():
             raise HTTPException(status_code=403, detail="Skjult")
 
         self.assertEqual(export_static._call(refused), {"detail": "Skjult", "status_code": 403})
+
+
+class AdminEncryptionTests(unittest.TestCase):
+    FILES = {"status": '{"a": 1}', "history": '{"b": "æøå"}'}
+
+    def test_round_trip(self):
+        bundle = encrypt_admin(self.FILES, "hemmelig", iterations=1000)
+        self.assertEqual(decrypt_admin(bundle, "hemmelig"), {"status": {"a": 1}, "history": {"b": "æøå"}})
+        self.assertEqual(bundle["kdf"]["iterations"], 1000)
+
+    def test_wrong_password_fails(self):
+        bundle = encrypt_admin(self.FILES, "hemmelig", iterations=1000)
+        with self.assertRaises(InvalidTag):
+            decrypt_admin(bundle, "forkert")
+
+    def test_a_file_cannot_be_swapped_for_another(self):
+        bundle = encrypt_admin(self.FILES, "hemmelig", iterations=1000)
+        bundle["files"]["status"], bundle["files"]["history"] = bundle["files"]["history"], bundle["files"]["status"]
+        with self.assertRaises(InvalidTag):
+            decrypt_admin(bundle, "hemmelig")
+
+    def test_salt_and_ivs_are_fresh_every_export(self):
+        first = encrypt_admin(self.FILES, "hemmelig", iterations=1000)
+        second = encrypt_admin(self.FILES, "hemmelig", iterations=1000)
+        self.assertNotEqual(first["kdf"]["salt"], second["kdf"]["salt"])
+        self.assertNotEqual(first["files"]["status"]["data"], second["files"]["status"]["data"])
 
 
 if __name__ == "__main__":

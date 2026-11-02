@@ -65,9 +65,12 @@ Tests: `python -m unittest discover -s tests -t .` (also run by GitHub Actions).
 ## GitHub Pages
 
 `.github/workflows/pages.yml` publishes a static, read-only version of the dashboard
-(matches, results, models, data; no prediction game) and keeps it current: every
+(matches, results, models; no prediction game) and keeps it current: every
 hour it runs the same sync as the Data tab's button, exports each API response the
 frontend reads to `data/<name>.json` (`src/export_static.py`) and deploys the result.
+The Data tab is for the admin: its data is published only encrypted
+(`data/admin.json`, AES-256-GCM with a key derived from `ADMIN_PASSWORD`) and the page
+decrypts it in the browser when the password is typed.
 The match/odds cache, prediction log and history are carried between runs as
 `matchhubml-state.tar.gz` in a release tagged `state`, so they never enter git history.
 
@@ -75,9 +78,10 @@ One-time setup, in a **public** repository (Pages and unlimited Actions minutes 
 free there; the code, `fixtures.csv` and the state archive are then public, the API
 keys are not):
 
-1. *Settings → Secrets and variables → Actions*: add `FOOTBALL_DATA_API_KEY` and
+1. *Settings → Secrets and variables → Actions*: add `FOOTBALL_DATA_API_KEY`,
    `FIVEDOLLARFOOTBALL_API_KEY` (the 5DollarFootball key; secret names cannot start
-   with a digit).
+   with a digit) and `ADMIN_PASSWORD` (unlocks the Data tab; use a long one, since
+   anyone can download `admin.json` and try passwords offline).
 2. *Settings → Pages → Source*: **GitHub Actions**.
 3. Create the starting state from your local data and attach it to a release:
    `python -m src.export_static pack matchhubml-state.tar.gz`, then *Releases → Draft a

@@ -9,12 +9,20 @@ syncs fixtures, results, odds and the season file through the same code as the s
 button), packs the updated state and publishes site/. The frontend detects the static
 build and reads data/<name>.json instead of calling the API; static_name() and
 staticName() in the HTML must stay in sync.
+
+The Data tab is for the admin only: its files are not published as plain JSON but
+encrypted into data/admin.json with ADMIN_PASSWORD (AES-256-GCM, key from
+PBKDF2-SHA256), which the page decrypts in the browser when the password is typed.
+Without ADMIN_PASSWORD the Data tab's data is left out entirely.
 """
 from __future__ import annotations
 
 import argparse
+import base64
 from datetime import datetime, timezone
+import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -27,6 +35,12 @@ FRONTEND_PATH = PROJECT_ROOT / "matchhubml_frontend_live.html"
 
 LEAGUES = ["Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1"]
 MATCH_LIMIT = 200  # what the frontend asks for
+
+# The Data tab's files: they name the data providers and API quotas, so they are only
+# published encrypted (admin.json). Must match ADMIN_FILES in the HTML.
+ADMIN_FILES = ("status", "odds-coverage", "sync-last", "history")
+ADMIN_PASSWORD_ENV = "ADMIN_PASSWORD"
+PBKDF2_ITERATIONS = 600_000  # OWASP's recommendation for PBKDF2-HMAC-SHA256
 
 # Everything a run reads or updates, relative to data/. Static inputs that are committed
 # (feature_reference.json, the experiment summaries) come from the checkout instead.
@@ -88,6 +102,44 @@ def unpack(archive: Path, data_dir: Path = DATA_DIR) -> list[str]:
         return [m.name for m in tar.getmembers() if m.isfile()]
 
 
+# ---------- admin encryption ----------
+
+def _b64(data: bytes) -> str:
+    return base64.b64encode(data).decode("ascii")
+
+
+def _admin_key(password: str, salt: bytes, iterations: int) -> bytes:
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations, dklen=32)
+
+
+def encrypt_admin(files: dict[str, str], password: str, iterations: int = PBKDF2_ITERATIONS) -> dict:
+    """Encrypt each file's JSON text with AES-256-GCM. The file name is the associated
+    data, so a ciphertext cannot be passed off as another file. Same format as
+    decryptAdmin() in the HTML (WebCrypto: ciphertext followed by the 16-byte tag)."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    salt = os.urandom(16)
+    aes = AESGCM(_admin_key(password, salt, iterations))
+    encrypted = {}
+    for name, text in files.items():
+        iv = os.urandom(12)
+        encrypted[name] = {"iv": _b64(iv), "data": _b64(aes.encrypt(iv, text.encode("utf-8"), name.encode("utf-8")))}
+    return {"kdf": {"name": "PBKDF2", "hash": "SHA-256", "iterations": iterations, "salt": _b64(salt)},
+            "files": encrypted}
+
+
+def decrypt_admin(bundle: dict, password: str) -> dict[str, object]:
+    """The reverse of encrypt_admin(); raises cryptography's InvalidTag on a wrong password."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    kdf = bundle["kdf"]
+    aes = AESGCM(_admin_key(password, base64.b64decode(kdf["salt"]), kdf["iterations"]))
+    return {
+        name: json.loads(aes.decrypt(base64.b64decode(f["iv"]), base64.b64decode(f["data"]), name.encode("utf-8")))
+        for name, f in bundle["files"].items()
+    }
+
+
 # ---------- export ----------
 
 def _encode(payload) -> str:
@@ -108,7 +160,14 @@ def _call(endpoint, *args, **kwargs):
         return {"detail": exc.detail, "status_code": exc.status_code}
 
 
-def export(out_dir: Path, *, sync: bool = True, now: datetime | None = None) -> list[str]:
+def export(
+    out_dir: Path,
+    *,
+    sync: bool = True,
+    now: datetime | None = None,
+    admin_password: str | None = None,
+) -> list[str]:
+    """Write the site; returns the names of the public data files (admin.json included when written)."""
     from . import api
 
     generated = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
@@ -135,6 +194,12 @@ def export(out_dir: Path, *, sync: bool = True, now: datetime | None = None) -> 
     # After the predictions: they are logged on the way, and performance scores the log.
     files["performance"] = _call(api.performance)
     files["meta"] = {"generated_utc": generated, "model_versions": versions}
+
+    admin = {name: _encode(files.pop(name)) for name in ADMIN_FILES}
+    if admin_password:
+        files["admin"] = encrypt_admin(admin, admin_password)
+    else:
+        print(f"[ADVARSEL] {ADMIN_PASSWORD_ENV} er ikke sat: Data-fanen udgives ikke.", flush=True)
 
     data_out = out_dir / "data"
     if out_dir.exists():
@@ -163,7 +228,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "export":
-        names = export(args.out_dir, sync=not args.no_sync)
+        names = export(args.out_dir, sync=not args.no_sync,
+                       admin_password=os.environ.get(ADMIN_PASSWORD_ENV) or None)
         print(f"Skrev {len(names)} datafiler og index.html til {args.out_dir}")
     elif args.command == "pack":
         names = pack(args.archive)

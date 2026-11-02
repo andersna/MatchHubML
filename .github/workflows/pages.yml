@@ -4,7 +4,7 @@
 # matchhubml-state.tar.gz, not in git: each run downloads it, syncs, uploads it again.
 #
 # One-time setup (see README, "GitHub Pages"):
-#   - Secrets: FOOTBALL_DATA_API_KEY and FIVEDOLLARFOOTBALL_API_KEY
+#   - Secrets: FOOTBALL_DATA_API_KEY, FIVEDOLLARFOOTBALL_API_KEY and ADMIN_PASSWORD
 #   - Settings > Pages > Source: GitHub Actions
 #   - A release tagged "state" with matchhubml-state.tar.gz attached
 #     (python -m src.export_static pack matchhubml-state.tar.gz)
@@ -62,6 +62,8 @@ jobs:
         env:
           FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
           FIVEDOLLARFOOTBALL_API_KEY: ${{ secrets.FIVEDOLLARFOOTBALL_API_KEY }}
+          # Encrypts the Data tab (admin only). Without it, the Data tab is not published.
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         # The app reads 5DOLLARFOOTBALL_API_KEY, which is not a valid secret name, so the
         # keys are written to .env (never committed, and gone when the runner is).
         run: |

@@ -196,7 +196,7 @@ footer{text-align:center;color:#71809f;font-size:11px;margin-top:24px}
   <div class="panel"><h3>Eksperiment 1 · Netværk der retter markedet (backtest 2010–2026)</h3><div class="sub" id="exp1Scope"></div><div class="tablewrap"><table id="exp1Table"></table></div>
     <div class="notice">V3 er <code>residual_27_ensemble</code>. Nye features (hviledage, oprykkere, skud-form, liga) og vægtning efter nyhed/label smoothing gav ingen sikker forbedring.</div></div>
   <div class="panel"><h3>Eksperiment 2 · Pinnacle i stedet for Bet365, og xG-form (sæsonvis 2016–2026)</h3><div class="tablewrap"><table id="exp2Table"></table></div>
-    <div class="notice">Alle rækker er vurderet på de samme kampe og sammenlignet med Bet365-odds alene. <b>Pinnacle-lukkeodds</b> kendes først ved kickoff og er kun en reference for, hvor meget bedre et skarpere/senere marked er. Football-data.co.uk stoppede med Pinnacle-priser i januar 2026, så Pinnacle kan ikke bruges live fra den kilde.</div></div>
+    <div class="notice">Alle rækker er vurderet på de samme kampe og sammenlignet med Bet365-odds alene. <b>Pinnacle-lukkeodds</b> kendes først ved kickoff og er kun en reference for, hvor meget bedre et skarpere/senere marked er. Pinnacle-priserne findes ikke i de historiske data efter januar 2026, så Pinnacle kan ikke bruges live.</div></div>
 </section>
 
 <!-- DATA -->
@@ -282,10 +282,33 @@ function staticName(path) {
   }
   return name;
 }
+// The Data tab's files are published only encrypted (data/admin.json); see src/export_static.py.
+const ADMIN_FILES = new Set(['status', 'odds-coverage', 'sync-last', 'history']);
+let adminData = null;
+const fromB64 = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
+async function decryptAdmin(bundle, password) {
+  const {salt, iterations} = bundle.kdf;
+  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey({name: 'PBKDF2', hash: 'SHA-256', salt: fromB64(salt), iterations},
+    material, {name: 'AES-GCM', length: 256}, false, ['decrypt']);
+  const files = {};
+  for (const [name, f] of Object.entries(bundle.files)) {
+    const plain = await crypto.subtle.decrypt({name: 'AES-GCM', iv: fromB64(f.iv), additionalData: new TextEncoder().encode(name)}, key, fromB64(f.data));
+    files[name] = JSON.parse(new TextDecoder().decode(plain));
+  }
+  return files;
+}
 async function api(path, options={}) {
   if (STATIC) {
     if ((options.method || 'GET') !== 'GET') throw new Error('Ikke muligt på den statiske side – data opdateres automatisk hver time.');
-    path = `data/${staticName(path)}.json`;
+    const name = staticName(path);
+    if (ADMIN_FILES.has(name)) {
+      const payload = adminData?.[name];
+      if (!payload) throw new Error('Kun for admin');
+      if (payload.status_code) throw new Error(payload.detail);
+      return payload;
+    }
+    path = `data/${name}.json`;
   }
   const response = await fetch(path, {headers:{Accept:'application/json'}, cache:'no-store', ...options});
   const payload = await response.json().catch(() => ({}));
@@ -307,7 +330,7 @@ function showTab(name) {
   if (name === 'game') loadGame();
   if (name === 'results') loadPerformance();
   if (name === 'models' && !state.loaded.models) loadModels();
-  if (name === 'data') { loadStatus(); loadCoverage(); loadLastSync(); loadHistory(); }
+  if (name === 'data' && (!STATIC || adminData)) { loadStatus(); loadCoverage(); loadLastSync(); loadHistory(); }
   try { localStorage.setItem('matchhub-tab', name); } catch (_) {}
 }
 
@@ -881,7 +904,7 @@ function cooldownLeft() {
 
 function updateSyncButton() {
   const button = $('syncButton'), left = cooldownLeft(), c = state.coverage;
-  if (state.syncing) return;
+  if (state.syncing || !button) return;  // the static site has no sync button
   clearTimeout(cooldownTimer);
   if (left > 0) {
     button.disabled = true;
@@ -1012,6 +1035,50 @@ async function refreshHistory() {
   }
 }
 
+/* ---------- Admin (statisk side) ---------- */
+function initAdminLock() {
+  const tab = $('tab-data'), panels = [...tab.children];
+  document.querySelector('nav button[data-tab=data]').firstChild.textContent = 'Data & synkronisering 🔒';
+  panels.forEach(panel => panel.classList.add('hidden'));
+  tab.insertAdjacentHTML('afterbegin', `<div id="adminLock" class="panel auth">
+    <h3>🔒 Kun for admin</h3>
+    <div class="sub">Indtast adgangskoden for at se data og synkronisering.</div>
+    <form id="adminForm" class="row">
+      <input type="text" autocomplete="username" value="admin" hidden>
+      <input type="password" id="adminPassword" placeholder="Adgangskode" aria-label="Adgangskode" autocomplete="current-password" required>
+      <div class="btns"><button class="btn primary" type="submit">Lås op</button></div>
+    </form>
+    <div id="adminMessage"></div>
+  </div>`);
+  $('adminForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = event.submitter || $('adminForm').querySelector('button');
+    button.disabled = true;
+    $('adminMessage').innerHTML = '<div class="notice">Låser op…</div>';
+    try {
+      const response = await fetch('data/admin.json', {cache: 'no-store'});
+      if (!response.ok) throw new Error('missing');
+      const bundle = await response.json();
+      try {
+        adminData = await decryptAdmin(bundle, $('adminPassword').value);
+      } catch (_) {
+        throw new Error('wrong');
+      }
+      $('adminLock').remove();
+      panels.forEach(panel => panel.classList.remove('hidden'));
+      document.querySelector('nav button[data-tab=data]').firstChild.textContent = 'Data & synkronisering';
+      loadStatus(); loadCoverage(); loadLastSync(); loadHistory();
+    } catch (error) {
+      $('adminMessage').innerHTML = `<div class="notice error">${error.message === 'wrong'
+        ? 'Forkert adgangskode.'
+        : 'Admin-data er ikke udgivet. Tilføj ADMIN_PASSWORD som secret i GitHub og kør workflowet igen.'}</div>`;
+      $('adminPassword').select();
+    } finally {
+      button.disabled = false;
+    }
+  });
+}
+
 /* ---------- Opstart ---------- */
 async function init() {
   try {
@@ -1042,6 +1109,7 @@ async function init() {
     const walker = document.createTreeWalker($('tab-data'), NodeFilter.SHOW_TEXT);
     for (let node; (node = walker.nextNode());) rewrites.forEach(([from, to]) => { node.nodeValue = node.nodeValue.replace(from, to); });
     document.querySelector('footer').textContent = 'MatchHubML · opdateres automatisk hver time · forudsigelser er modelestimater, ikke garantier';
+    initAdminLock();
     state.hideModel = false;
   } else {
     initGame();
