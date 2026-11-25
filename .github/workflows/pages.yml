@@ -31,9 +31,6 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     env:
       GH_TOKEN: ${{ github.token }}
       STATE_ASSET: matchhubml-state.tar.gz
@@ -80,5 +77,16 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: site
+
+  # Deploying in its own job, as GitHub's examples do: within the job that uploaded it,
+  # deploy-pages intermittently (and since 23 Nov every time) could not find the artifact.
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - id: deployment
         uses: actions/deploy-pages@v5
